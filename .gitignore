@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+*.log
+.env
+.env.local
+.env.*.local
+.DS_Store
+.idea/
+.vscode/
+*.tsbuildinfo
+# Codigo de terceiro e material do enunciado: local, nunca redistribuido
+api/docs/referencia_tecnica
+api/docs/*.pdf

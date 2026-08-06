@@ -1,0 +1,48 @@
+services:
+  api:
+    image: api-prontomed
+    container_name: api-prontomed
+    build:
+      context: ./api
+      dockerfile: Dockerfile.dev
+    env_file: [./api/.env]
+    environment:
+      # Dentro da rede o banco atende por `database:5432`; do host, por
+      # `localhost:5433` (5432 fica com outro stack Postgres da máquina).
+      - POSTGRES_HOST=database
+      - POSTGRES_PORT=5432
+    volumes:
+      - ./api:/usr/src/app
+      # Preserva o node_modules da imagem, que o bind acima sobreporia.
+      # `dist/` NÃO leva volume anônimo: `deleteOutDir: true` faria rmdir num ponto
+      # de montagem e o boot morreria com EBUSY. Quem resolve o dono do artefato é o
+      # `USER node` do Dockerfile.dev.
+      - /usr/src/app/node_modules
+    ports: ['3333:3333']
+    depends_on:
+      database:
+        condition: service_healthy
+    networks: [prontomed-net]
+
+  database:
+    image: postgres:16-alpine
+    container_name: db-prontomed
+    # Fonte única das credenciais: POSTGRES_USER/PASSWORD/DB vêm do mesmo .env da api.
+    env_file: [./api/.env]
+    ports: ['5433:5432']
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./api/db/init-test-db.sh:/docker-entrypoint-initdb.d/init-test-db.sh
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [prontomed-net]
+
+networks:
+  prontomed-net:
+    driver: bridge
+
+volumes:
+  pgdata:
