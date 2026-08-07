@@ -28,10 +28,10 @@
 
 | | ALTO | MÉDIO | BAIXO | Total |
 | --- | --- | --- | --- | --- |
-| **Abertos** | 2 | 6 | 3 | **11** |
+| **Abertos** | 2 | 7 | 3 | **12** |
 | **Resolvidos** | 0 | 0 | 0 | **0** |
 
-Por área: privacidade 1 · domínio 3 · segurança 4 · arquitetura 2 · performance 1.
+Por área: privacidade 1 · domínio 3 · segurança 4 · arquitetura 3 · performance 1.
 <!-- /§visao-geral -->
 
 ---
@@ -112,6 +112,16 @@ uso, então não há como detectar que uma cópia está sendo usada em paralelo.
 **Por que fica assim:** o enunciado pede "login/logout, token JWT" como item *desejável*. A versão com rotação exigiria `family_id`, auto-FK `replaced_by`, revogação em cascata, janela de graça para não derrubar sessão legítima por refresh concorrente, e os três testes mais frágeis da suíte — complexidade que o avaliador teria de destrinchar sem que nenhum requisito a peça (ADR-11, [PLAN.md §3.1](PLAN.md)).
 **Mitigação em vigor:** TTL de 8 horas (a sessão morre no fim do turno), `revoked_at` no logout, INV-06 (nunca se grava o token cru).
 **Gatilho de reabertura:** qualquer exposição fora de `localhost`, ou o primeiro usuário real.
+
+### DEBT-12 · MÉDIO · arquitetura
+**Qualquer violação de unicidade no banco responde "Já existe um agendamento neste horário".**
+O `AllExceptionsFilter` traduz o `23505` do Postgres para 409 `SCHEDULE_CONFLICT`
+sem olhar **qual** constraint falhou. Enquanto a agenda (INV-01) for a única
+unicidade alcançável por requisição, a mensagem está sempre certa; na segunda, ela
+passa a mentir com cara de verdade.
+**Por que fica assim:** mapear constraint → mensagem exige uma tabela de nomes de índice dentro do filtro — nome de objeto de banco vazando para a borda HTTP — para um caso que ainda não existe (o médico nasce por seed, não por endpoint).
+**Mitigação em vigor:** o texto do driver, com o nome da constraint, vai para o log em `warn`: qual índice estourou é sempre recuperável.
+**Gatilho de reabertura:** a segunda constraint `UNIQUE` alcançável por endpoint.
 <!-- /§abertos -->
 
 ---

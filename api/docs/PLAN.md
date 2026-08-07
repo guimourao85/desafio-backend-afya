@@ -649,7 +649,9 @@ prontomed-api/                     ← raiz do repositório
    │  ├─ integration/              *.e2e-spec.ts (§12.4)
    │  └─ factories/                arranjo de caso reaproveitado
    └─ src/
-      ├─ main.ts                   NestFactory · setGlobalPrefix('api') · Swagger · filtro global
+      ├─ main.ts                   NestFactory · configureApp · setupSwagger · listen
+      ├─ app.setup.ts              configureApp(): prefixo global + filtro — usado pelo main E pelos e2e
+      ├─ swagger.setup.ts          setupSwagger(): patchNestJsSwagger · DocumentBuilder · /api/docs
       ├─ app.module.ts             ConfigModule(validate: Zod) · DatabaseModule · AuthModule · HttpModule + módulos de domínio
       │
       ├─ domains/domain/
@@ -1143,8 +1145,13 @@ Ordem por dependência real. Cada fase termina verde
 
 ### F6 — Swagger e seed (RNF-03)
 
-1. `patchNestJsSwagger()` + `DocumentBuilder` com `addBearerAuth()`; `/api/docs`.
-2. `@ApiTags` por módulo (`Auth`, `Pacientes`, `Agendamentos`), `@ApiOperation` e `@ApiResponse` com **exemplos**, inclusive dos erros interessantes (409, 422).
+1. ~~`patchNestJsSwagger()` + `DocumentBuilder` com `addBearerAuth()`; `/api/docs`.~~
+   **Antecipado para a sprint 01.03** ([sprint-01.03](desenvolvimento/sprints/sprint-01.03-openapi.md)):
+   sem o documento montado, F2–F5 escreveriam `@ApiOperation` que ninguém veria — e
+   `review-backend.md §verifica` já cobra essas anotações em toda rota nova. Com a
+   infra em pé desde F1, cada fase nasce navegável e o item 2 abaixo passa a
+   acompanhar cada endpoint, em vez de se acumular aqui.
+2. `@ApiTags` por módulo (`Auth`, `Pacientes`, `Agendamentos`), `@ApiOperation` e `@ApiResponse` com **exemplos**, inclusive dos erros interessantes (409, 422) — escritos junto de cada rota, revisados aqui.
 3. Seed espelhando os wireframes: médico demo, pacientes Pedro/Eduardo/Bruno, consultas em 01/01, 10/02 e 15/05 com anotações.
 
 **Pronto quando:** dá para logar, clicar em **Authorize**, colar o token e executar **todos** os endpoints direto do `/api/docs`.
@@ -1195,7 +1202,7 @@ Ordem por dependência real. Cada fase termina verde
   "lint":              "eslint \"{src,test}/**/*.ts\" --fix",
   "test":              "jest --passWithNoTests",
   "test:cov":          "jest --coverage",
-  "test:e2e":          "jest --config ./test/jest-e2e.json --runInBand",
+  "test:e2e":          "NODE_ENV=test jest --config ./test/jest-e2e.json --runInBand",
   "migration:create":  "typeorm-ts-node-commonjs migration:create ./src/infrastructure/databases/typeorm/postgres/migrations/$npm_config_name",
   "migration:generate":"typeorm-ts-node-commonjs migration:generate ./src/infrastructure/databases/typeorm/postgres/migrations/$npm_config_name -d ./src/infrastructure/databases/typeorm/postgres/typeorm-database.datasource.ts",
   "migration:run":     "typeorm-ts-node-commonjs migration:run -d ./src/infrastructure/databases/typeorm/postgres/typeorm-database.datasource.ts",
@@ -1510,17 +1517,23 @@ CMD ["npm", "run", "start:dev"]
 > true` do `nest-cli.json` faria `rmdir` num ponto de montagem e o boot morre com
 > `EBUSY`. O volume anônimo é só para `node_modules`.
 
-**Pré-condição do primeiro `up` — dois comandos, não um:**
+**Pré-condição do primeiro `up`, a partir de um clone:**
 
 ```bash
 cp api/.env.example api/.env      # o compose lê ./api/.env; ele é gitignorado
-cd api && npm install             # gera package-lock.json (COMITADO) e node_modules do host
-cd .. && docker compose up -d
+docker compose up -d
 ```
 
-> `npm ci` **exige** `package-lock.json` — sem o lock comitado, o build da imagem
-> aborta. E o `node_modules` do host não é luxo: `lint`, `typecheck` e `test` rodam
-> fora do container (o volume anônimo `/usr/src/app/node_modules` isola o de dentro).
+> `npm ci` **exige** `package-lock.json` — mas ele é **comitado**, então o clone já o
+> traz e o `npm install` no host deixou de ser pré-condição. Quem clona precisa de
+> Docker e nada mais; `lint`, `typecheck` e `test` rodam por `docker exec`.
+
+> ⚠️ **Armadilha de ordem, se você quiser rodar npm no host.** O volume anônimo
+> `/usr/src/app/node_modules` faz o daemon criar esse ponto de montagem em
+> `api/node_modules` **como root**. Rodar `npm install` no host *depois* do primeiro
+> `up` falha com `EACCES`, e o conserto é `sudo rm -rf api/node_modules`. Antes do
+> primeiro `up`, funciona. Dentro do container, o problema não existe — que é por
+> que o README manda por lá.
 
 <a id="apF"></a>
 

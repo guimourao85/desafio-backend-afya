@@ -5,16 +5,16 @@
 > - §objetivo — o esqueleto que todo módulo usa: erro com `code`, envelope único, validação global, banco conectado
 > - §decisoes — 14 decisões, 6 de comparar com a `referencia_tecnica/`, 4 da fricção PRÉ
 > - §nomes — token do DataSource, tabela de migration, os 8 `code` do catálogo
-> - §escopo — 19 passos: erro → constantes → banco → borda HTTP → registro → teste
+> - §escopo — 21 passos: erro → constantes → banco → borda HTTP → registro → teste
 > - §edge-cases — 11 casos, incluindo os defeitos da referência que não vamos herdar
-> - §checklist — o gate pré-fechamento
-> - §scores — fricção PRÉ (registrada) e PÓS
-> - §issues — o que aparecer durante a implementação
+> - §checklist — o gate pré-fechamento, todo marcado
+> - §scores — fricção PRÉ e PÓS, mais o que foi verificado à mão
+> - §issues — 13 descobertas: 10 da implementação (uma virou DEBT-12) e 3 da passada de simplicidade
 >
 > **Plano canônico:** [PLAN.md §13 — F1](../../PLAN.md) · **Estado:** [PRODUCT.md §roadmap](../../PRODUCT.md) · **Formato:** [SPRINT-TEMPLATE.md](../../SPRINT-TEMPLATE.md)
 
-**Branch:** `main` · **Início:** 2026-08-06 · **Fase:** F1
-**Status:** ⬜ não iniciada — fricção PRÉ aprovada, aguardando implementação
+**Branch:** `main` · **Início:** 2026-08-06 · **Fim:** 2026-08-06 · **Fase:** F1
+**Status:** ✅ verde — `lint` `typecheck` `build` `test` (21) `test:e2e` (10); fricção PÓS aprovada
 **Triagem:** COMPLEXO (16 arquivos, `DataSource` é decisão de banco) → plano + fricção PRÉ ≥9/10 + aprovação + implementar + fricção PÓS
 **Agentes:** `[Backend]` `[Produto]` (no limite) · `[Database]` `[QA]` (obrigatórios, fora do limite)
 
@@ -260,6 +260,12 @@ registro → teste.
 | 17 | Criar | `test/integration/error-envelope.e2e-spec.ts` — rota inexistente (PT-BR + `code`) e payload inválido | NOVO | 14 |
 | 18 | Verificar | `migration:run` **e** `migration:run:test` conectam e criam `typeorm_migrations` nos dois bancos | — | 7 |
 | 19 | Editar | `api/README.md` — migrations deixam de ser "a preencher"; documentar os dois comandos | ALTER | 18 |
+| 20 | Criar | `src/app.setup.ts` — `configureApp()`, prefixo + filtro (**issue 4**, fricção PÓS) | NOVO | 10 |
+| 21 | Criar | `test/integration/database-connection.e2e-spec.ts` — prova a decisão 10 (**issue 5**) | NOVO | 8 |
+
+> Os passos 20 e 21 não estavam no plano: 20 saiu da fricção PÓS, 21 do item de
+> §checklist que exigia *provar* a seleção do banco dentro do e2e e não tinha
+> arquivo onde morar.
 
 ### Migrations
 
@@ -288,7 +294,7 @@ registro → teste.
 | 7 | Rota inexistente | **404** no envelope, `code: RESOURCE_NOT_FOUND`, mensagem **PT-BR** | decisões 12 + 13, e2e |
 | 8 | e2e roda com `NODE_ENV=test` | O provider seleciona `POSTGRES_DB_TEST`; o banco de dev não é tocado | decisão 10 + asserção do banco conectado |
 | 9 | Migration precisa existir no banco de teste | `migration:run:test` roda contra `$POSTGRES_DB_TEST` | decisão 10b + passo 18 |
-| 10 | Status HTTP fora do catálogo (405, 413) | `code: INTERNAL_ERROR`, status preservado | decisão 12 |
+| 10 | Status HTTP fora do catálogo (405, 413) | `code: INTERNAL_ERROR`, status preservado, mensagem genérica quando não há uma própria mapeada | decisão 12 + issue 12 |
 | 11 | `details[]` em resposta que não é 400 | **Nunca aparece** — o campo é exclusivo do ramo 1 | filtro + spec |
 
 > Nenhum caso de escopo por médico nem de concorrência: não há `doctorId`, não há
@@ -301,37 +307,37 @@ registro → teste.
 ## Checklist anti-erro (pré-fechamento)
 
 **Verde**
-- [ ] `lint` + `typecheck` + `build` + `test` + `test:e2e` — todos verdes
-- [ ] Critério de `PLAN.md §13 F1` verificado à mão: rota inexistente devolve o envelope; erro forçado devolve 500 **sem stack**
-- [ ] `npm run migration:run` **e** `npm run migration:run:test` executam e criam `typeorm_migrations` — conferido nos **dois** bancos com `\dt`
+- [x] `lint` + `typecheck` + `build` + `test` (21) + `test:e2e` (10) — todos verdes
+- [x] Critério de `PLAN.md §13 F1`: rota inexistente devolve o envelope — conferido com `curl` no container. O "500 sem stack" foi provado por **spec**, não à mão: F1 não tem rota capaz de forçar um 500 real, e inventar uma seria código morto no repositório
+- [x] `npm run migration:run` **e** `npm run migration:run:test` executam e criam `typeorm_migrations` — conferido nos **dois** bancos com `\dt`
 
 **Banco**
-- [ ] `synchronize: false` e `migrationsRun` ausente/false nos **dois** DataSources
-- [ ] `migrationsTableName: 'typeorm_migrations'` nos dois — sem assimetria
-- [ ] `migrations` por caminho relativo ao **arquivo** (decisão 9)
-- [ ] O DataSource do CLI usa import **relativo** do barril — provado rodando `migration:generate --name=probe` e apagando o arquivo gerado (decisão 2b)
-- [ ] `logging: false` explícito nos dois (decisão 14)
-- [ ] Nenhuma entity, nenhuma migration criada nesta sprint
-- [ ] `NODE_ENV=test` seleciona `POSTGRES_DB_TEST` — **provado** afirmando o banco conectado dentro do e2e
+- [x] `synchronize: false` e `migrationsRun: false` **explícitos** nos dois DataSources
+- [x] `migrationsTableName: 'typeorm_migrations'` nos dois — sem assimetria
+- [x] `migrations` por caminho relativo ao **arquivo** (decisão 9)
+- [x] O DataSource do CLI usa import **relativo** do barril — `migration:generate --name=probe` carregou o barril e respondeu "No changes in database schema were found"; nenhum arquivo a apagar, porque sem entity não há o que gerar
+- [x] `logging: false` explícito nos dois (decisão 14) — o CLI sobrescreve, ver issue 7
+- [x] Nenhuma entity, nenhuma migration criada nesta sprint
+- [x] `NODE_ENV=test` seleciona `POSTGRES_DB_TEST` — provado por `SELECT current_database()` dentro do e2e
 
 **Contrato**
-- [ ] Os 5 ramos do filtro implementados e cobertos por spec
-- [ ] `details[]` só em 400, com `path` em string
-- [ ] Toda mensagem em PT-BR, inclusive as que vêm do Nest (decisão 13)
-- [ ] Nenhuma resposta contém nome de constraint, SQL ou stack
-- [ ] Todo status fora do catálogo cai em `INTERNAL_ERROR` (decisão 12)
+- [x] Os 5 ramos do filtro implementados e cobertos por spec
+- [x] `details[]` só em 400, com `path` em string
+- [x] Toda mensagem em PT-BR, inclusive as que vêm do Nest (decisão 13)
+- [x] Nenhuma resposta contém nome de constraint, SQL ou stack — asserção explícita no spec do ramo 3
+- [x] Todo status fora do catálogo cai em `INTERNAL_ERROR` (decisão 12)
 
 **Arquitetura**
-- [ ] Nenhum `getDataSource()` global; quem precisa injeta o token
-- [ ] Nenhum `console.log`/`console.error` — `Logger` do Nest
-- [ ] Regra de fronteira segue provada: sonda em `services/` continua reprovando
-- [ ] Estrutura conforme `PLAN.md §10` — nada fora dela
+- [x] Nenhum `getDataSource()` global; quem precisa injeta o token
+- [x] Nenhum `console.log`/`console.error` — `Logger` do Nest
+- [x] Regra de fronteira segue provada: sonda em `services/` continua reprovando
+- [x] Estrutura conforme `PLAN.md §10` — única adição fora dela: `src/app.setup.ts` (issue 4)
 
 **Higiene**
-- [ ] `dotenv` em `dependencies`, não transitivo
-- [ ] Nenhum `TODO`, nenhum arquivo morto (não criar `repositories.ts` vazio)
-- [ ] Scores ≥ 9/10 na fricção PÓS; zero CRÍTICO e zero ALTO em aberto
-- [ ] `PRODUCT.md §roadmap`: linha 01.02 → ✅
+- [x] `dotenv` em `dependencies`, não transitivo
+- [x] Nenhum `TODO`, nenhum arquivo morto (o `repositories.ts` vazio não foi criado)
+- [x] Scores ≥ 9/10 na fricção PÓS; zero CRÍTICO e zero ALTO em aberto — 3 MÉDIO, um deles virou DEBT-12 e um foi corrigido na hora
+- [x] `PRODUCT.md §roadmap`: linha 01.02 → ✅
 <!-- /§checklist -->
 
 ---
@@ -344,11 +350,33 @@ registro → teste.
 | `[Database]` | PRÉ | **7/10 → 9/10** | ALTO (2) | REJECTED na 1ª passada: migrations nunca alcançariam `prontomed_test` (falha diferida para F2) e o DataSource do CLI usaria `@/`, que o CLI não resolve. Re-scorado após 2b, 3b, 10b, 14 |
 | `[Backend]` | PRÉ | **8/10 → 9/10** | ALTO (1) | Ambiguidade entre §escopo #11 e decisão 5 sobre reimplementar ou configurar o pipe. Resolvida por verificação do `nestjs-zod`; `repositories.ts` vazio cortado |
 | `[Produto]` | PRÉ | **7/10 → 9/10** | ALTO (2) | REJECTED: `code` indefinido para `HttpException` fora do catálogo e 404 devolvendo `Cannot GET` em inglês. Re-scorado após 11, 12, 13 |
-| `[Backend]` | PÓS | /10 | | |
-| `[Produto]` | PÓS | /10 | | |
-| `[QA]` | PÓS | /10 | | ramos do filtro, determinismo, gate de fechamento de fase |
+| `[Database]` | PÓS | **10/10** | — | Nenhuma entity, nenhuma migration. `synchronize: false`, `migrationsRun: false`, `migrationsTableName` e caminho relativo conferidos nos **dois** DataSources; `typeorm_migrations` verificada com `\dt` em `prontomed` **e** `prontomed_test`. A correção da 10b (issue 1) é o que fecha o ALTO 1 da fricção PRÉ — e ela só apareceu na implementação |
+| `[Backend]` | PÓS | **9/10** | MÉDIO (1) | Camadas respeitadas, sonda de fronteira segue reprovando, zero `getDataSource()`, zero `console.*`. MÉDIO: os dois DataSources duplicam as opções de conexão — duplicação da decisão 2, consciente, e o custo é uma edição a mais por opção nova |
+| `[Produto]` | PÓS | **9/10** | MÉDIO (1) | Envelope estrito de §9.4, `details[]` só no 400, todo status fora do catálogo em `INTERNAL_ERROR`, nenhuma resposta com SQL, constraint ou stack. MÉDIO: a mensagem fixa do `23505` (issue 8) → **DEBT-12** |
+| `[QA]` | PÓS | **9/10** | MÉDIO (1) | 5 ramos do filtro cobertos + o negativo (`42P01` cai no genérico) + a exclusividade do `details[]`; e2e cobre rota inexistente, payload inválido, campo desconhecido e caminho feliz. Determinístico: sem relógio, sem ordem, sem estado compartilhado. MÉDIO **corrigido durante a fricção**: a configuração do `main.ts` não era exercitada (issue 4) |
 
-**Conflitos entre agentes:** nenhum. Os 5 ALTO foram independentes.
+| `[Backend]` | PÓS 2ª | **10/10** | — | Passada de **simplicidade** ([PLAN.md §3.1](../../PLAN.md)), pedida depois da 1ª: catálogo de `code` fechado como tipo (issue 11), duas mensagens "por precaução" cortadas (issue 12), um método privado de uso único inlinado (issue 13), comentários longos reduzidos ao porquê. O filtro perdeu 12 linhas sem perder um ramo |
+
+**Conflitos entre agentes:** nenhum, nem na PRÉ nem na PÓS. Os 5 ALTO da PRÉ foram
+independentes; os 3 MÉDIO da PÓS não se cruzam.
+
+> A 2ª passada não achou defeito de comportamento — achou **excesso**. O padrão dos
+> três: proteção escrita para um caso que o compilador já cobre (11), para um caso
+> que não existe (12) e para uma estrutura que encolheu (13). Vale como lembrete de
+> que defensivo demais também é dívida.
+
+**Verificações feitas à mão, não inferidas** (fricção PÓS):
+
+```
+curl /api/nao-existe → {"statusCode":404,"code":"RESOURCE_NOT_FOUND",
+                        "message":"Recurso não encontrado."}   (container real)
+docker compose stop database + restart api → ExceptionHandler: getaddrinfo
+   ENOTFOUND database, sem "successfully started"              (fail-fast, decisão 8)
+\dt em prontomed e prontomed_test → typeorm_migrations nos dois
+migration:generate --name=probe → "No changes in database schema were found"
+   (o CLI carregou o barril: com `@/` teria morrido antes — decisão 2b)
+sonda em services/ importando typeorm → ESLint reprova (regra de fronteira viva)
+```
 
 > A fricção PRÉ reprovou a **primeira versão deste doc**, não o código — que ainda não
 > existe. Os 5 ALTO foram corrigidos no plano; 3 deles (10b, 12, 13) eram falha
@@ -362,7 +390,21 @@ registro → teste.
 
 | # | Descoberta | Causa raiz | Solução | Arquivos | Virou |
 | --- | --- | --- | --- | --- | --- |
-| | | | | | |
+| 1 | A decisão 10b **não funcionava como escrita**: `POSTGRES_DB=$POSTGRES_DB_TEST` no script expande para vazio no host — a variável mora no `.env`, não no shell — e `dotenv` não sobrescreve chave já definida em `process.env`, nem quando o valor é `''` | Confundi "está no `.env`" com "está no ambiente do shell". Só coincide dentro do container, onde o compose injeta o `env_file` | O script liga `NODE_ENV=test` e o DataSource do CLI seleciona o banco pelo **mesmo eixo** do provider da app. Efeito idêntico, mecanismo determinístico nos dois lugares, zero variável nova | `package.json`, `typeorm-database.datasource.ts` | correção da decisão 10b |
+| 2 | `test:e2e` verde, mas o Jest não encerrava ("did not exit one second after") | `DataSource` criado por `useFactory`: o Nest sabe construí-lo e não sabe que `destroy()` é o fim dele. O pool sobrevivia ao `app.close()` — e sobreviveria a um shutdown de produção | `DatabaseModule implements OnModuleDestroy`, injetando o próprio token | `database.module.ts` | — |
+| 3 | O filtro não compilava: `Response` do Express sem tipos | `@types/express` não é dependência do projeto (nunca foi — F0 não precisou) | Interface estrutural de 3 linhas com a superfície usada (`status().json()`), em vez de instalar `@types/express`. O filtro deixa de conhecer o transporte concreto | `exception-filter.ts` | — |
+| 4 | **Fricção PÓS, `[QA]`:** o filtro era registrado no `main.ts`, mas cada e2e o registrava por conta própria — apagar a linha do bootstrap deixaria a suíte inteira verde | Configuração duplicada entre produção e teste: o teste reproduzia o `main.ts` em vez de usá-lo | `app.setup.ts` com `configureApp()`, consumido pelo `main.ts` **e** pelos e2e. Swagger fica fora dele (F6): e2e não monta OpenAPI | `app.setup.ts`, `main.ts`, 2 e2e | passo 20 |
+| 5 | O item de §checklist "provar a seleção do banco dentro do e2e" não tinha arquivo previsto | §escopo listou só o e2e de envelope | `database-connection.e2e-spec.ts`: afirma `current_database()`, `synchronize`, `migrationsRun` e `migrationsTableName` | `test/integration/` | passo 21 |
+| 6 | Não havia como exercitar o ramo 1 ponta a ponta: F1 não entrega endpoint com corpo | O contrato de erro nasce **antes** dos endpoints, de propósito | Controller de sonda declarado dentro do próprio e2e. O `APP_PIPE` que ele exercita é o global de verdade | `error-envelope.e2e-spec.ts` | — |
+| 7 | `logging: false` (decisão 14) não silencia o `migration:run` | O CLI do TypeORM sobrescreve as opções do DataSource e força log de query | Nada a fazer: a decisão vale para a **aplicação**, que é onde a poluição importava. Fica registrado para não ser lido como desvio | — | observação |
+| 8 | Todo `23505` responde "Já existe um agendamento neste horário", qualquer que seja a constraint | O filtro traduz o código do Postgres, não o nome do índice | Aceito enquanto a agenda for a única unicidade alcançável por requisição; o nome da constraint vai para o log | `exception-filter.ts` | **DEBT-12** |
+| 9 | O provider da referência declara `imports:` dentro do objeto de provider | Custom provider não tem `imports` — a chave é ignorada pelo Nest. Funciona lá por acidente: `EnvironmentModule` é `@Global` | Descartado. O provider injeta `EnvironmentService` direto | `database.providers.ts` | — |
+| 10 | O README apontava tokens em `shared/constants/repositories.ts` | Arquivo que a fricção PRÉ cortou (§nomes) e que o README de 01.01 já citava | Corrigido para `shared/constants/` | `README.md` | — |
+| 11 | **2ª passada de fricção PÓS (simplicidade):** `DomainError.code` era `string`, e por isso o filtro precisava de um ramo defensivo — `if (status)`, log, 500 — para o `code` que ninguém mapeou | Tipo aberto empurra para runtime uma checagem que o compilador faz de graça | `DomainErrorCode` fechado e `Record<DomainErrorCode, number>`: o mapa é exaustivo **por construção**. Menos 8 linhas no filtro, e `code` novo sem status vira erro de build — verificado com um code de mentira: `TS2741 Property ... is missing` | `domain-error.ts`, `exception-filter.ts` | — |
+| 12 | O mapa de mensagens tinha 403 e 405 | Escritos "por precaução". 403 **contradiz INV-04** (recurso alheio é 404, nunca 403) e 405 não é produzido: Express devolve 404 para verbo não mapeado | Ambos cortados. O spec do 405 passa a provar o **fallback** genérico — que é o comportamento real, e vale mais que uma mensagem que nunca aparece | `exception-filter.ts` e spec | ajuste no §edge-cases 10 |
+| 13 | `internalError()` privado ficou com um uso só depois do issue 11 | Método extraído quando havia dois chamadores | Inline no ramo 5 | `exception-filter.ts` | — |
+| 14 | A decisão 10 dependia de o **Jest injetar** `NODE_ENV=test`, e ele só injeta quando a variável não vem definida. Dentro do container ela vem: o `env_file` do compose entrega `NODE_ENV=development`. Um `docker exec ... npm run test:e2e` apontaria o e2e para o banco de **desenvolvimento** | Proteção apoiada em comportamento implícito de ferramenta, não em declaração explícita | `test:e2e` passa a declarar `NODE_ENV=test`, como o `migration:run:test` já fazia. Deixa de importar o que o Jest decide, e o comando vale igual dentro e fora do container | `package.json`, `PLAN.md §14.2` | — |
+| 15 | `npm install` no host falha com `EACCES` depois do primeiro `docker compose up` | O volume anônimo `/usr/src/app/node_modules` faz o daemon criar o mountpoint em `api/node_modules` como **root**. A ordem `install → up` funciona; `up → install` não | README passa a rodar tudo por `docker exec`; a armadilha fica registrada em `PLAN.md` Apêndice E | `README.md`, `PLAN.md` Ap. E | — |
 
 > Preencher **durante** a sprint, não no fechamento.
 > Herdado de 01.01: o `prontomed_test` existia sem consumidor — as decisões 10 e 10b

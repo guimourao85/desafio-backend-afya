@@ -260,7 +260,8 @@ sub-doc de sprint. Esta tabela é a única amarração canônica sprint ↔ fase
 | Sprint | Fase | Entrega (resumo — plano em [PLAN.md §13](PLAN.md)) | Sub-doc | Estado |
 | --- | --- | --- | --- | --- |
 | 01.01 | F0 | Fundação: TS strict, ESLint com regra de fronteira, Jest, Docker, `/api/health` | [sprint-01.01](desenvolvimento/sprints/sprint-01.01-fundacao.md) | ✅ |
-| 01.02 | F1 | Kernel: `Either`, erro de domínio com `code`, filtro global, pipe Zod, data source | [sprint-01.02](desenvolvimento/sprints/sprint-01.02-kernel.md) | ⬜ |
+| 01.02 | F1 | Kernel: `Either`, erro de domínio com `code`, filtro global, pipe Zod, data source | [sprint-01.02](desenvolvimento/sprints/sprint-01.02-kernel.md) | ✅ |
+| 01.03 | F6 (item 1) | OpenAPI antecipado: `/api/docs` navegável desde já, para que F2 nasça clicável | [sprint-01.03](desenvolvimento/sprints/sprint-01.03-openapi.md) | ✅ |
 | 02.01 | F2 | `authentication`: login, refresh, logout revogável, `me` | — | ⬜ |
 | 03.01 | F3 | `patients`: cadastro, listagem, edição, anonimização LGPD | — | ⬜ |
 | 04.01 | F4 | `appointments`: agenda com recusa de conflito, reagendamento, cancelamento | — | ⬜ |

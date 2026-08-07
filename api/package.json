@@ -15,7 +15,7 @@
     "lint": "eslint \"{src,test}/**/*.ts\" --fix",
     "test": "jest --passWithNoTests",
     "test:cov": "jest --coverage",
-    "test:e2e": "jest --config ./test/jest-e2e.json --runInBand",
+    "test:e2e": "NODE_ENV=test jest --config ./test/jest-e2e.json --runInBand",
     "migration:create": "typeorm-ts-node-commonjs migration:create ./src/infrastructure/databases/typeorm/postgres/migrations/$npm_config_name",
     "migration:generate": "typeorm-ts-node-commonjs migration:generate ./src/infrastructure/databases/typeorm/postgres/migrations/$npm_config_name -d ./src/infrastructure/databases/typeorm/postgres/typeorm-database.datasource.ts",
     "migration:run": "typeorm-ts-node-commonjs migration:run -d ./src/infrastructure/databases/typeorm/postgres/typeorm-database.datasource.ts",
