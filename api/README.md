@@ -1,98 +1,33 @@
-# ProntoMed API
+# Arquitetura do backend
 
-Backend de prontuário eletrônico: o médico cadastra pacientes, agenda consultas e
-registra as anotações de cada atendimento.
+Documento **técnico**: camadas, injeção de dependência, contrato de erro,
+persistência e o que o lint garante. Como subir o projeto está no
+[README da raiz](../README.md); requisitos, agregados e invariantes estão em
+[`docs/PRODUCT.md`](docs/PRODUCT.md); as decisões e suas alternativas, em
+[`docs/PLAN.md`](docs/PLAN.md).
 
-> **Estado: 🚧 F1 concluída, mais o OpenAPI antecipado.** O projeto sobe com Docker,
-> responde `/api/health`, conecta no Postgres e publica o Swagger em `/api/docs`.
-> Sem autenticação e sem domínio ainda — isso vem de F2 em diante.
-> O plano completo — requisitos, modelagem, invariantes, contratos da API e fases na
-> ordem de execução — está em **[`docs/PLAN.md`](docs/PLAN.md)**.
-> Este README é finalizado na F7, seguindo o contrato de `docs/PLAN.md §15`.
+> Este arquivo descreve o que **existe** no repositório hoje (F1 + OpenAPI). O que
+> ainda não foi construído está marcado como _(F2+)_.
 
-## Do clone ao Swagger
+---
 
-**Pré-requisito: Docker. Só isso** — nem Node, nem npm, nem Postgres no host,
-inclusive para rodar os testes. Todo comando abaixo roda da **raiz** do repositório,
-onde mora o `docker-compose.yml`.
+## Premissa
 
-```bash
-# 1. configuração — o .env é gitignorado, e o compose o exige nos dois serviços
-cp api/.env.example api/.env
-```
+**DDD sobre hexagonal, na estrutura de pastas do NestJS.** Duas ideias, com papéis
+distintos:
 
-Não é preciso editar nada. Os valores do exemplo sobem o ambiente inteiro, inclusive
-um `JWT_SECRET` placeholder que satisfaz o mínimo de 32 caracteres do schema. Se este
-projeto algum dia sair de `localhost`, aí sim: `openssl rand -base64 48`.
+| | O que resolve | Como aparece no código |
+| --- | --- | --- |
+| **Hexagonal** | Isolar a regra da tecnologia | O service depende de uma **porta** (interface); o `*.provider.ts` entrega o adapter TypeORM _(F2+)_ |
+| **DDD** | Definir a unidade de consistência | Agregados se referenciam **por ID**, e uma transação toca um só — a transação vive no adapter, nunca no service |
 
-```bash
-# 2. sobe o ambiente
-docker compose up -d
-```
+A injeção de dependência é a do **Nest**: nenhum container próprio, nenhum
+service locator. O que não está no `exports` de um módulo não é injetável fora dele —
+essa é a fronteira real.
 
-Na primeira vez isto **builda a imagem** (`npm ci` completo, ~3 min). O compose cria o
-volume do Postgres, roda `db/init-test-db.sh` para criar os dois bancos (`prontomed` e
-`prontomed_test`) e só então sobe a API — o `depends_on: service_healthy` garante a
-ordem. Nas próximas vezes, segundos.
+---
 
-```bash
-# 3. confere que a API está no ar
-curl localhost:3333/api/health          # → {"status":"ok"}
-```
-
-Se ainda não responder, a API está compilando: `docker logs api-prontomed --tail 20`
-mostra o progresso e espera-se `Nest application successfully started`.
-
-```bash
-# 4. aplica as migrations no banco de desenvolvimento
-docker exec api-prontomed npm run migration:run
-```
-
-**Este passo não é opcional, e o `/api/health` não denuncia a falta dele** — o
-healthcheck não sonda o banco de propósito (`docs/PLAN.md §13 F0`). Sem as migrations,
-a API sobe verde e só quebra na primeira rota que tocar uma tabela.
-
-> Roda **dentro do container**: usa o `node_modules` da imagem e o
-> `POSTGRES_HOST=database` da rede do compose. É o mesmo banco que você alcançaria do
-> host por `localhost:5433`.
->
-> Enquanto F2 não entrega a primeira tabela, o comando responde
-> `No migrations are pending` e cria apenas o ledger `typeorm_migrations`. Está certo:
-> o passo existe desde já para não ser esquecido quando passar a importar.
-
-```bash
-# 5. abre a API
-http://localhost:3333/api/docs
-```
-
-O Swagger é a ferramenta de avaliação: cada endpoint é executável dali. Enquanto F2
-não entra, há uma rota só (`GET /api/health`) e o botão **Authorize** ainda não abre
-nada — ele nasceu junto com o documento para que cada fase seguinte já apareça
-clicável. O documento cru fica em `/api/docs-json`.
-
-**Para derrubar:** `docker compose down` — ou `docker compose down -v` para apagar
-também os bancos, que é o que força o `init-test-db.sh` a rodar de novo.
-
-## Stack
-
-Node 22 · TypeScript 5 strict · **NestJS 10** · TypeORM (migrations geradas e
-revisadas) · PostgreSQL 16 · Zod (`nestjs-zod`) · Jest + Supertest · Docker Compose.
-
-Ambiente de **desenvolvimento apenas** — a POC é avaliada localmente.
-
-## Arquitetura em cinco linhas
-
-A estrutura espelha a da **referência técnica**: `domains/domain` (entities,
-services, portas) · `gateways/http` (controllers, schemas Zod, pipes) ·
-`framework` (guards, filtro de exceções) · `infrastructure` (DataSource,
-migrations, adapters) · `presentation` (presenters) · `shared` (tokens, `Either`,
-env). A injeção de dependência é a do NestJS: `*.module.ts` + `*.provider.ts`, com
-tokens em `shared/constants/`.
-
-Sobre essa estrutura, duas proteções: **hexagonal** — o service depende de uma
-**porta**, e o provider entrega o adapter TypeORM; e **DDD** — quatro agregados
-(`Doctor`, `RefreshSession`, `Patient`, `Appointment`, com as anotações dentro
-dele) que se referenciam **por ID** e nunca compartilham transação.
+## Regra de dependência
 
 ```
 gateways/http ──▶ domains/domain/services ──▶ repositories (portas)
@@ -100,76 +35,224 @@ gateways/http ──▶ domains/domain/services ──▶ repositories (portas)
                                      infrastructure (adapters TypeORM)
 ```
 
-O service não importa `typeorm` e nenhum módulo injeta o repositório de outro —
-isso é **regra de lint**, não promessa de README.
+A seta aponta **para dentro**. O núcleo não conhece transporte nem persistência; quem
+conhece os dois é a borda.
 
-<a id="testes"></a>
+| Proibição | Onde é enforçada |
+| --- | --- |
+| `services/**` importar `typeorm`, `@nestjs/typeorm`, `express`, `pg`, `bcryptjs`, `@nestjs/jwt`, `crypto` | ESLint (`no-restricted-imports`) |
+| `services/**` importar `infrastructure/**` ou `gateways/**` | ESLint |
+| `controllers/**` importar `typeorm` ou `infrastructure/**` | ESLint |
+| Um módulo de domínio injetar o token de repositório de outro | review `[Backend]` |
+| Service orquestrar transação, ou receber `Request`/`Response` | review `[Backend]` |
+
+`model-entities/**` **pode** importar `typeorm`: a entity é a do ORM, por decisão
+(ADR-03) — não há mapeamento domínio ⇄ persistência. A linha protegida é o **service**.
+
+Para conferir que a regra está viva, e não apenas escrita:
+
+```bash
+mkdir -p src/domains/domain/services/_probe
+printf "import { DataSource } from 'typeorm';\nexport const p = (d: DataSource) => d;\n" \
+  > src/domains/domain/services/_probe/probe.ts
+npx eslint src/domains/domain/services/_probe/probe.ts   # deve REPROVAR
+rm -rf src/domains/domain/services/_probe
+```
+
+---
+
+## Estrutura
+
+```
+src/
+├─ main.ts                    NestFactory · configureApp · setupSwagger · listen
+├─ app.setup.ts               configureApp(): prefixo global + filtro de exceções
+├─ swagger.setup.ts           setupSwagger(): patchNestJsSwagger · DocumentBuilder
+├─ app.module.ts              ConfigModule(validate) · EnvironmentModule · DatabaseModule · HttpModule
+│
+├─ domains/domain/            O NÚCLEO — sem framework de transporte, sem ORM
+│  ├─ model-entities/         entities + barril `index.ts` que os DataSource consomem
+│  ├─ repositories/           PORTAS (interfaces)                            (F2+)
+│  ├─ enums/                                                                 (F2+)
+│  └─ services/               casos de uso + `*.module.ts` + `*.provider.ts`  (F2+)
+│
+├─ gateways/http/             A BORDA DE ENTRADA
+│  ├─ http.module.ts          controllers + APP_PIPE (+ APP_GUARD em F2)
+│  ├─ controllers/core/       health
+│  ├─ controllers/domain/                                                    (F2+)
+│  ├─ schemas/domain/         schemas Zod + DTOs via createZodDto            (F2+)
+│  └─ pipes/                  zod-validation-pipe.ts
+│
+├─ framework/                 PLUMBING do Nest
+│  ├─ filters/errors/         exception-filter.ts
+│  ├─ authentication/         guard, decorators                              (F2+)
+│  └─ cryptography/           adapters de PasswordHasher / TokenIssuer        (F2+)
+│
+├─ infrastructure/databases/typeorm/postgres/
+│  ├─ typeorm-database.datasource.ts   o DataSource do CLI
+│  ├─ database.providers.ts            o DataSource da aplicação
+│  ├─ database.module.ts               @Global + shutdown da conexão
+│  ├─ migrations/                      linha do tempo única                  (F2+)
+│  ├─ repositories/                    adapters que implementam as portas    (F2+)
+│  └─ seeds/                                                                 (F6)
+│
+├─ presentation/presenters/   serialização de saída                          (F2+)
+└─ shared/
+   ├─ constants/              tokens de DI
+   ├─ errors/                 either.ts + types/ (DomainError com `code`)
+   ├─ interfaces/cryptography/ PORTAS de cripto                              (F2+)
+   └─ environments/           schema Zod do ambiente + EnvironmentService
+```
+
+---
+
+## Composição da aplicação
+
+Três funções, com escopos deliberadamente diferentes:
+
+| Onde | O que registra | Quem usa |
+| --- | --- | --- |
+| `configureApp()` | prefixo global `api` + `AllExceptionsFilter` | `main.ts` **e** todo e2e |
+| `setupSwagger()` | OpenAPI em `/api/docs` | só `main.ts` e o e2e de OpenAPI |
+| `bootstrap()` | compõe as duas e faz `listen` | processo |
+
+`configureApp` existe separada porque **configuração que só o `main.ts` executa não é
+exercitada por ninguém**: enquanto cada teste repetia `setGlobalPrefix` +
+`useGlobalFilters` por conta própria, remover o filtro do bootstrap deixava a suíte
+inteira verde. `setupSwagger` fica de fora dela pelo motivo oposto — montar o
+documento OpenAPI é custo que nenhuma suíte deveria pagar para responder a uma
+requisição.
+
+---
+
+## Contrato de erro
+
+Três peças em sequência: o service devolve, o filtro traduz, o cliente lê.
+
+**1. `Either` (`shared/errors/either.ts`)** — o erro esperado faz parte da assinatura:
+
+```ts
+const result = await this.service.execute(input);
+if (result.isLeft()) throw result.value;   // o filtro traduz pelo `code`
+return Presenter.toHTTP(result.value);
+```
+
+`throw` fica reservado ao que é **defeito**. Erro esperado que sobe como exceção some
+da assinatura, e quem chama deixa de ser obrigado a tratá-lo.
+
+**2. `DomainError` (`shared/errors/types/`)** — abstrata, com `code` de **tipo
+fechado**:
+
+```ts
+export type DomainErrorCode = 'INVALID_CREDENTIALS' | 'UNAUTHENTICATED' | /* … */;
+```
+
+O tipo fechado é o que faz o compilador cobrar o mapeamento no filtro: um `code` novo
+sem status vira erro de build — `TS2741 Property … is missing in Record<DomainErrorCode, number>` —
+em vez de um 500 em produção.
+
+**3. `AllExceptionsFilter` (`framework/filters/errors/`)** — `@Catch()` sem argumento,
+cinco ramos em **ordem significativa**:
+
+| # | Entrada | Saída |
+| --- | --- | --- |
+| 1 | `ZodValidationException` | 400 `VALIDATION_ERROR` + `details[]` |
+| 2 | `DomainError` | status do catálogo, `code` e mensagem da própria classe |
+| 3 | `QueryFailedError` com `23505` | 409 com mensagem humana; texto do driver só no log |
+| 4 | `HttpException` do Nest | status dele, `code` derivado, mensagem PT-BR |
+| 5 | qualquer outra coisa | 500 genérico, stack só no `Logger.error` |
+
+A ordem não é estética: `ZodValidationException` **é** uma `HttpException`, e se o
+ramo 4 viesse antes, todo payload inválido responderia um 400 opaco, sem `details[]`.
+
+Envelope único, `details` exclusivo do 400:
+
+```jsonc
+{ "statusCode": 409, "code": "SCHEDULE_CONFLICT", "message": "…", "details": [ … ] }
+```
+
+Nenhuma resposta carrega SQL, nome de constraint ou stack — há asserção de teste para
+cada um desses três.
+
+---
+
+## Validação
+
+`ZodValidationPipe` registrado como **`APP_PIPE`**, global. Deriva o schema do DTO da
+própria rota:
+
+```ts
+export const scheduleSchema = z.object({ /* … */ }).strict();
+export class ScheduleDto extends createZodDto(scheduleSchema) {}
+```
+
+Global por decisão: validação opcional é validação ausente. O `.strict()` faz campo
+desconhecido virar erro em vez de silêncio. E o mesmo schema alimenta o OpenAPI via
+`patchNestJsSwagger()` — uma fonte para validação e documentação, sem `@ApiProperty`
+duplicando o que o Zod já declara.
+
+Três camadas, propósitos distintos: **borda** ("tem forma de payload?" → 400) ·
+**domínio** ("é legítimo agora?" → 422/409) · **banco** ("e se dois pedidos chegarem
+juntos?" → 409 de constraint).
+
+---
+
+## Persistência
+
+**Dois `DataSource`, por obrigação e não por gosto:**
+
+| Arquivo | Quem consome | Config vem de |
+| --- | --- | --- |
+| `typeorm-database.datasource.ts` | o CLI do TypeORM (`-d` dos scripts) | `process.env` cru — o CLI roda fora do Nest, logo sem DI |
+| `database.providers.ts` | a aplicação | `EnvironmentService`, já validado no boot |
+
+Detalhes que não são óbvios ao ler:
+
+- **O DataSource do CLI importa o barril de entities por caminho relativo**, nunca por
+  `@/`. `typeorm-ts-node-commonjs` não registra `tsconfig-paths`, e o alias faria
+  `migration:generate` morrer em `Cannot find module`.
+- **`migrations` aponta para `join(__dirname, …)`**, relativo ao arquivo — funciona de
+  qualquer cwd e depois do build, quando os `.js` estão em `dist/`.
+- **`NODE_ENV=test` seleciona `POSTGRES_DB_TEST`** nos dois. É o que impede o e2e de
+  escrever no banco de desenvolvimento. Os scripts `test:e2e` e `migration:run:test`
+  declaram a variável explicitamente, em vez de depender de o Jest injetá-la.
+- **`synchronize: false` e `migrationsRun: false`**, explícitos: schema muda por
+  comando revisado, nunca porque alguém reiniciou o processo.
+- **`DatabaseModule` implementa `OnModuleDestroy`.** O `DataSource` vem de
+  `useFactory`, então o Nest sabe construí-lo mas não sabe que `destroy()` é o fim
+  dele — sem o hook, o pool sobrevive ao `app.close()`.
+- **`initialize()` no `useFactory`**: banco fora do ar mata o processo no start com
+  erro legível, em vez de responder 500 na primeira requisição.
+
+Migrations são **geradas** (`migration:generate`), **revisadas** e **forward-only** —
+migration aplicada nunca é editada; a correção é uma migration nova.
+
+---
 
 ## Testes
 
-Tudo dentro do container, com o ambiente de pé:
+| Camada | Monta | Prova | Onde |
+| --- | --- | --- | --- |
+| **Unitário** | `TestingModule` com a porta sobrescrita por um in-memory | regra pura, sem banco | `*.spec.ts` ao lado do alvo |
+| **Integração** | `AppModule` inteiro + Supertest + Postgres real | rota → service → banco, incluindo constraints | `test/integration/*.e2e-spec.ts` |
 
-```bash
-docker exec api-prontomed npm run lint
-docker exec api-prontomed npm run typecheck
-docker exec api-prontomed npm test                   # unitários
-docker exec api-prontomed npm run migration:run:test # schema no banco de teste
-docker exec api-prontomed npm run test:e2e           # integração, contra o Postgres real
-```
+Se um teste unitário precisar mockar `DataSource` ou o repositório concreto, isso é
+vazamento de arquitetura — conserta-se o código, não o teste.
 
-O `migration:run:test` é um comando **separado** de propósito: são dois bancos no
-mesmo container, e o e2e nunca toca o de desenvolvimento — é o que impede um teste de
-destruir o seed de demonstração. Os dois scripts declaram `NODE_ENV=test`
-explicitamente, então valem tanto aqui quanto rodados de fora.
+`test/factories/probe.controller.ts` é uma sonda: até F2 nenhuma rota de produção
+recebe corpo, e sem uma que receba não há como exercitar o `APP_PIPE` global nem a
+derivação Zod → OpenAPI. Ela vive em `test/`, fora do alcance do `nest build`.
 
-> **Rodar no host é possível, mas só se `npm install` vier antes do primeiro
-> `docker compose up`.** O compose monta um volume anônimo em
-> `/usr/src/app/node_modules`, e o daemon cria esse ponto de montagem no host como
-> `root` — depois disso, `npm install` no host falha com `EACCES` até você apagar
-> `api/node_modules` com `sudo`. Dentro do container o problema não existe.
+---
 
-## Comandos
+## Convenções
 
-| Comando | O que faz |
+| Item | Regra |
 | --- | --- |
-| `docker compose up -d` / `down` | sobe / derruba o ambiente |
-| `docker compose down -v` | derruba **apagando o volume** — necessário para recriar `prontomed_test` |
-| `docker logs api-prontomed --tail 50` | logs da API |
-| `docker exec -it api-prontomed sh` | um shell dentro do container, para rodar `npm run ...` sem Node no host |
-| `npm run lint` · `typecheck` · `build` | gates de código |
-| `npm test` · `npm run test:e2e` | unitários · integração |
-| `npm run migration:run` | aplica as migrations no banco de **desenvolvimento** |
-| `npm run migration:run:test` | as mesmas migrations no `prontomed_test` — o banco que o e2e usa |
-| `npm run migration:generate --name=<escopo>` | gera a migration a partir das entities, para **revisão** antes do commit |
-
-**Portas:** API em `3333`. Postgres em **`5433` no host** (dentro da rede Docker
-continua `5432`) — 5432 pode estar ocupada por outro projeto na mesma máquina.
-
-**Bancos:** `prontomed` (desenvolvimento) e `prontomed_test`, ambos no mesmo
-container. O `prontomed_test` é criado por `db/init-test-db.sh`, que o Postgres
-roda **só no primeiro boot do volume** — se ele não existir, `docker compose down -v`
-e suba de novo.
-
-**Migrations:** rodam por comando, nunca no boot (`synchronize: false`,
-`migrationsRun: false`). São **dois** bancos e, portanto, dois comandos: quem for
-rodar o e2e precisa ter aplicado `migration:run:test` antes, senão o teste falha
-com `relation does not exist`. A linha do tempo é única, em
-`src/infrastructure/databases/typeorm/postgres/migrations/`, e migration aplicada
-nunca é editada — a correção é uma migration nova.
-
-_A preencher: F6 (seed de demonstração), F7 (roteiro de avaliação em 6 passos —
-login → Authorize → paciente → agendamento → o 409 do horário ocupado → anotação)._
-
-## Documentação
-
-| Documento | Conteúdo |
-| --- | --- |
-| [`docs/PLAN.md`](docs/PLAN.md) | Plano de implementação completo, em ordem de execução |
-| [`docs/PRODUCT.md`](docs/PRODUCT.md) | Produto e domínio: personas, jornadas, agregados, invariantes, ADRs |
-| [`docs/DEBITOS-TECNICOS.md`](docs/DEBITOS-TECNICOS.md) | Débitos declarados, com gatilho de reabertura |
-| `/api/docs` (runtime) | OpenAPI + Swagger UI, gerados dos schemas Zod — no ar com o container de pé |
-
-## Origem
-
-Desafio técnico "Desafio Backend" (Afya). A leitura do enunciado, a interpretação
-dos wireframes e a rastreabilidade requisito → fase estão em `docs/PLAN.md` §1–§3.
+| Idioma | Código, arquivos e banco em **inglês**; mensagem ao cliente da API em **PT-BR** |
+| Arquivo | `kebab-case` com sufixo de papel: `schedule-appointment.service.ts` |
+| Classe | `PascalCase`; porta **sem** prefixo `I` |
+| Service | um método público `execute`, verbo no infinitivo |
+| Banco | `snake_case`, tabela no plural, constraints `pk_` `fk_` `uk_` `idx_` `ck_` |
+| Teste | `*.spec.ts` ao lado do alvo; e2e em `test/integration/` |
+| Import | alias `@/` para `src/` — exceto no DataSource do CLI, que o CLI não resolve |
