@@ -1,13 +1,24 @@
 # ProntoMed API
 
-Backend de prontuário eletrônico: o médico cadastra pacientes, agenda consultas e
-registra as anotações de cada atendimento.
+Backend de um prontuário eletrônico de consultório. O médico se autentica, mantém a
+própria base de pacientes, opera a agenda — que recusa dois atendimentos no mesmo
+horário — e registra as anotações de cada consulta. Quando um paciente exerce o
+direito ao esquecimento, a identificação é apagada **sem** perder o histórico de
+atendimentos.
+
+Há uma única persona e ela só enxerga o que é seu: paciente, agenda e anotação de
+outro médico não existem para ela. Isso não é filtro de tela — é regra do domínio,
+enforçada em toda leitura e escrita.
+
+**O desafio.** Resposta a um desafio técnico de backend: API REST com autenticação,
+cadastro de pacientes, agenda com regra de conflito, anotações de atendimento,
+persistência relacional e documentação executável. A leitura do enunciado, a
+interpretação dos wireframes e a rastreabilidade requisito → fase estão em
+[`api/docs/PLAN.md`](api/docs/PLAN.md) §1–§3.
 
 > **Estado: 🚧 F1 concluída, mais o OpenAPI antecipado.** O projeto sobe com Docker,
 > responde `/api/health`, conecta no Postgres e publica o Swagger em `/api/docs`.
 > Sem autenticação e sem domínio ainda — isso vem de F2 em diante.
-> O plano completo — requisitos, modelagem, invariantes, contratos da API e fases na
-> ordem de execução — está em **[`api/docs/PLAN.md`](api/docs/PLAN.md)**.
 > Este README é finalizado na F7, seguindo o contrato de `api/docs/PLAN.md §15`.
 
 ## Do clone ao Swagger
@@ -48,25 +59,16 @@ inclusive para os testes. Todo comando roda da **raiz** do repositório.
 
 ## Stack
 
-Node 22 · TypeScript 5 strict · **NestJS 10** · TypeORM (migrations geradas e
-revisadas) · PostgreSQL 16 · Zod (`nestjs-zod`) · Jest + Supertest · Docker Compose.
+Node 22 · TypeScript 5 strict · **NestJS 10** · TypeORM · PostgreSQL 16 ·
+Zod (`nestjs-zod`) · Jest + Supertest · Docker Compose.
 
 Ambiente de **desenvolvimento apenas** — a POC é avaliada localmente.
 
-## Arquitetura em três linhas
-
-**DDD sobre hexagonal**: o caso de uso depende de uma **porta**, o provider entrega o
-adapter TypeORM, e os agregados se referenciam por ID sem compartilhar transação.
-
-```
-gateways/http ──▶ domains/domain/services ──▶ repositories (portas)
-                                                     ▲
-                                     infrastructure (adapters TypeORM)
-```
-
-O service não importa `typeorm` e nenhum módulo injeta o repositório de outro —
-isso é **regra de lint**, não promessa de README. O detalhe técnico, camada por
-camada, está em **[`api/README.md`](api/README.md)**.
+**Como o backend é construído** — DDD sobre hexagonal, com a regra de dependência
+apontando para dentro e enforçada por lint — está em
+**[`api/README.md`](api/README.md)**, que é o documento de arquitetura: camadas,
+injeção de dependência, contrato de erro, persistência e estratégia de teste. Nada
+disso é repetido aqui.
 
 <a id="testes"></a>
 
@@ -121,26 +123,22 @@ container. O `prontomed_test` é criado por `api/db/init-test-db.sh`, que o Post
 roda **só no primeiro boot do volume** — se ele não existir, `docker compose down -v`
 e suba de novo.
 
-**Migrations:** rodam por comando, nunca no boot (`synchronize: false`,
-`migrationsRun: false`). São **dois** bancos e, portanto, dois comandos: quem for
-rodar o e2e precisa ter aplicado `migration:run:test` antes, senão o teste falha
-com `relation does not exist`. A linha do tempo é única, em
-`api/src/infrastructure/databases/typeorm/postgres/migrations/`, e migration aplicada
-nunca é editada — a correção é uma migration nova.
+**Migrations:** rodam por comando, nunca no boot — e são **dois** bancos, portanto
+dois comandos. O porquê disso e o fluxo de geração e revisão estão em
+[`api/README.md`](api/README.md#persistência).
 
 _A preencher: F6 (seed de demonstração), F7 (roteiro de avaliação em 6 passos —
 login → Authorize → paciente → agendamento → o 409 do horário ocupado → anotação)._
 
 ## Documentação
 
-| Documento                                              | Conteúdo                                                                    |
-| ------------------------------------------------------ | --------------------------------------------------------------------------- |
-| [`api/docs/PLAN.md`](api/docs/PLAN.md)                         | Plano de implementação completo, em ordem de execução                       |
-| [`api/docs/PRODUCT.md`](api/docs/PRODUCT.md)                   | Produto e domínio: personas, jornadas, agregados, invariantes, ADRs         |
-| [`api/docs/DEBITOS-TECNICOS.md`](api/docs/DEBITOS-TECNICOS.md) | Débitos declarados, com gatilho de reabertura                               |
-| `/api/docs` (runtime)                                  | OpenAPI + Swagger UI, gerados dos schemas Zod — no ar com o container de pé |
+Cada assunto tem **um** dono; os outros documentos apontam para ele.
 
-## Origem
-
-Desafio técnico "Desafio Backend" (Afya). A leitura do enunciado, a interpretação
-dos wireframes e a rastreabilidade requisito → fase estão em `api/docs/PLAN.md` §1–§3.
+| Se você quer | Vá para |
+| --- | --- |
+| Entender **como o backend é construído** — camadas, DI, contrato de erro, persistência, testes | [`api/README.md`](api/README.md) |
+| Entender **o produto e o domínio** — personas, jornadas, agregados, invariantes, ADRs | [`api/docs/PRODUCT.md`](api/docs/PRODUCT.md) |
+| Ver o **plano de execução** — requisitos, fases na ordem, contratos HTTP, padrões de código | [`api/docs/PLAN.md`](api/docs/PLAN.md) |
+| Saber **o que ficou de fora e por quê**, com gatilho de reabertura | [`api/docs/DEBITOS-TECNICOS.md`](api/docs/DEBITOS-TECNICOS.md) |
+| Acompanhar **como cada sprint foi executada** — decisões, issues, scores de review | [`api/docs/desenvolvimento/sprints/`](api/docs/desenvolvimento/sprints/) |
+| **Exercitar a API** | `/api/docs`, com o ambiente de pé |
