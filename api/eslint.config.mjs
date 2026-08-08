@@ -57,6 +57,12 @@ export default tseslint.config(
   {
     // `model-entities/**` fica de fora de propósito: a entity é a do ORM (ADR-03).
     files: ['src/domains/domain/services/**/*.ts'],
+    // `*.provider.ts` e `*.module.ts` também: eles são o **composition root** do
+    // módulo — amarrar porta a adapter exige, por definição, conhecer os dois lados.
+    // A regra existe para proteger o caso de uso, e o caso de uso é o `*.service.ts`.
+    // Preço: lógica de negócio escondida num provider não é pega pelo lint; quem
+    // pega é o review [Backend].
+    ignores: ['src/domains/domain/services/**/*.provider.ts', 'src/domains/domain/services/**/*.module.ts'],
     rules: {
       // A regra base ignora `import type { Repository } from 'typeorm'`; a do plugin, não.
       'no-restricted-imports': 'off',

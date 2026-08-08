@@ -400,6 +400,16 @@ export class Appointment {
 `@Index` nomeado (com `where` quando parcial) · `@Check` nomeado · `foreignKeyConstraintName`
 nas FKs · `transformer` em toda coluna `numeric`.
 
+> **A FK entre agregados é escrita na revisão, à mão** (sprint 02.01, decisão 4 —
+> verificado contra o gerador). Como agregados se referenciam por ID puro, sem
+> `@ManyToOne` (ADR-04), **não há relação para o gerador derivar FK alguma**: o SQL
+> sai sem ela. Pôr um `@ManyToOne` só para o gerador produzi-la furaria o ADR para
+> economizar três linhas de SQL. Integridade referencial é decisão de *persistência*
+> e a revisão da migration é obrigatória de qualquer forma — então a FK entra ali, no
+> `up()` **e** no `down()`, com o nome de `review-database.md §regras`
+> (`fk_<tabela>_<referenciada>`). `foreignKeyConstraintName` acima segue valendo para
+> FK **dentro** do mesmo agregado, onde a relação existe.
+
 ### 6.4 Notas de modelagem
 
 - **Altura em metros** (`1.68`) — casa com o wireframe. `numeric`, nunca `float`.
@@ -502,15 +512,25 @@ export abstract class PasswordHasher {
 
 // shared/interfaces/cryptography/token-issuer.ts
 export abstract class TokenIssuer {
-  abstract issueAccessToken(payload: { sub: string; email: string }): Promise<string>;
+  abstract issueAccessToken(
+    payload: { sub: string; email: string },
+  ): Promise<{ token: string; expiresInSeconds: number }>;
   abstract generateRefreshToken(): string;          // 32 bytes aleatórios, base64url
   abstract hashRefreshToken(token: string): string; // SHA-256 hex (INV-06)
 }
 ```
 
+> **Corrigido na sprint 02.01 (decisão 3).** `issueAccessToken` devolvia
+> `Promise<string>`. O contrato HTTP publica `expiresIn: 900`, e quem conhece o TTL
+> é o adapter, que lê `JWT_ACCESS_TTL='15m'` — sem o campo, a conversão de `'15m'`
+> em segundos acontece fora da porta, e parsing de formato de lib vaza para o caso
+> de uso. O `JwtTokenIssuer` deriva `expiresInSeconds` do próprio token (`exp - iat`),
+> sem uma segunda fonte de verdade para divergir do `signOptions`.
+
 `BcryptPasswordHasher` e `JwtTokenIssuer` implementam as duas; o
-`CryptographyModule` as exporta. **O ganho concreto é no teste:** o unitário injeta
-um hasher falso e não paga os ~80 ms de bcrypt por caso.
+`CryptographyModule` as exporta — e é o **único** módulo que registra o `JwtModule`.
+**O ganho concreto é no teste:** o unitário injeta um hasher falso e não paga os
+~80 ms de bcrypt por caso.
 
 ### 8.5 Guard global, exceção explícita
 
@@ -1275,6 +1295,7 @@ O que o README **não** faz: repetir este plano, explicar DDD, ou pedir desculpa
 4. `npm run migration:run` aplica. **Nunca** `synchronize: true`; **nunca** `migrationsRun: true` no boot.
 5. **Forward-only:** migration aplicada nunca é editada — a correção é uma migration nova.
 6. Uma linha do tempo global em `infrastructure/.../migrations`.
+7. **`uuidExtension: 'pgcrypto'` nos dois DataSources** (`typeorm-database.datasource.ts` e `database.providers.ts`). Sem a opção, o gerador emite `DEFAULT uuid_generate_v4()` e o TypeORM instala a extensão `uuid-ossp` **por fora da migration** — efeito colateral que não está no arquivo revisado e que o `down()` não desfaz. Com ela, o SQL sai `gen_random_uuid()`, como §6.2 especifica, e o PG 13+ não precisa de extensão nenhuma. Vale para toda tabela futura. (Sprint 02.01, decisão 13.)
 
 ### 16.3 Débitos técnicos
 
@@ -1290,6 +1311,8 @@ sobre ele) e **DEBT-07** (nada impede tentar milhares de senhas no login).
 - **`zod` fica em `^3.23`** e `nestjs-zod` na major compatível. O `zod-to-openapi` que o `nestjs-zod` usa não acompanha o Zod 4 — subir a major quebra a geração do Swagger.
 - **`numeric` volta como string** do TypeORM: sem `transformer`, `heightM` é `"1.68"` (§6.4).
 - **`migration:generate` inventa nomes** de constraint quando a entity não os declara (`UQ_a1b2c3…`). Declare na entity (§6.3).
+- **O DataSource instala extensão sozinho, sem migration.** Não é só o `migration:generate`: o DataSource **da aplicação** também instala `uuid-ossp` no `initialize()` quando há coluna `uuid` gerada e falta `uuidExtension` — schema mudando porque alguém reiniciou o processo, que é exatamente o que `migrationsRun: false` existe para impedir. Observado ao vivo na sprint 02.01, em watch mode. Daí a opção estar nos **dois** DataSources (§16.2 item 7).
+- **O gerador não produz FK entre agregados**, porque não há `@ManyToOne` para derivá-la (ADR-04). Ela entra na revisão, à mão, no `up()` e no `down()` (§6.3).
 - **Índice parcial só sai se a entity tiver `where`** no `@Index`. Confira o SQL gerado — sem ele, INV-01 fica sem a garantia do banco.
 - **`.strict()` nos schemas Zod**, senão campo desconhecido passa em silêncio.
 - **`nest start --watch` sem swc** (§14.1).
@@ -1378,6 +1401,9 @@ export default tseslint.config(
   prettier,
   {
     files: ['src/domains/domain/services/**/*.ts'],
+    // Composition root: amarrar porta a adapter exige conhecer os dois lados.
+    ignores: ['src/domains/domain/services/**/*.provider.ts',
+              'src/domains/domain/services/**/*.module.ts'],
     rules: {
       'no-restricted-imports': 'off',
       '@typescript-eslint/no-restricted-imports': ['error', { patterns: FORBIDDEN_IN_SERVICES }],
@@ -1402,6 +1428,16 @@ export default tseslint.config(
 
 > `model-entities/**` **pode** importar `typeorm` — a entity é a do ORM (ADR-03).
 > O bloco casa por glob e é inerte enquanto a pasta não existe: instalar em F0 custa zero.
+
+> **`*.provider.ts` e `*.module.ts` também ficam de fora** (acrescentado na sprint
+> 02.01, quando a regra reprovou o primeiro provider a existir). Eles são o
+> **composition root** do módulo: `useFactory: (ds) => new TypeOrmXRepository(ds)` —
+> a forma que o próprio `review-backend.md §verifica` prescreve — exige, por
+> definição, importar `typeorm` e `infrastructure/**`. A regra existe para proteger o
+> **caso de uso**, e o caso de uso é o `*.service.ts`. Sem a exceção, a convenção do
+> `CLAUDE.md` ("`*.provider.ts` ao lado dos services") seria inaplicável.
+> **Preço:** regra de negócio escondida num provider deixa de ser pega pelo lint —
+> quem pega é o review `[Backend]`.
 
 <a id="apD"></a>
 
