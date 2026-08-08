@@ -34,6 +34,11 @@ export const AppDataSource = new DataSource({
   password: process.env.POSTGRES_PASSWORD,
   database,
   entities: [...entities],
+  // Sem isto o gerador emite `DEFAULT uuid_generate_v4()` e o TypeORM instala a
+  // extensão `uuid-ossp` **por fora da migration** — efeito colateral que não está
+  // no arquivo revisado e que o `down()` não desfaz. Com a opção, sai
+  // `gen_random_uuid()`, que é o DDL de PLAN.md §6.2 e é nativo do PG 13+.
+  uuidExtension: 'pgcrypto',
   // Caminho relativo ao ARQUIVO, não ao cwd: funciona de qualquer diretório e
   // continua funcionando depois do build, quando os `.js` estão em `dist/`.
   migrations: [join(__dirname, 'migrations', '*{.ts,.js}')],

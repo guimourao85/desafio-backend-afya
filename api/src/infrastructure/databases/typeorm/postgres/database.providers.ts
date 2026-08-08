@@ -31,7 +31,10 @@ export const databaseProviders = [
         password: environment.get('POSTGRES_PASSWORD'),
         database,
         entities: [...entities],
-        // Configuração mantida por simetria com o CLI. Nunca execute runMigrations() 
+        // Simetria com o CLI (que é quem gera o SQL): as duas configurações
+        // divergentes seriam duas verdades sobre o mesmo schema.
+        uuidExtension: 'pgcrypto',
+        // Configuração mantida por simetria com o CLI. Nunca execute runMigrations()
         // a partir deste DataSource.
         migrations: [join(__dirname, 'migrations', '*{.ts,.js}')],
         migrationsTableName: 'typeorm_migrations',
