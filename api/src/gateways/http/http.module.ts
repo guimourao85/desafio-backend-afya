@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_PIPE } from '@nestjs/core';
 
 import { AuthenticationModule } from '@/domains/domain/services/authentication/authentication.module';
+import { PatientsModule } from '@/domains/domain/services/patients/patients.module';
 import { JwtAuthGuard } from '@/framework/authentication/jwt-auth.guard';
 import { CryptographyModule } from '@/framework/cryptography/cryptography.module';
 
@@ -12,6 +13,13 @@ import {
   RefreshSessionController,
   RevokeSessionController,
 } from './controllers/domain/authentication';
+import {
+  AnonymizePatientController,
+  GetPatientController,
+  ListPatientsController,
+  RegisterPatientController,
+  UpdatePatientController,
+} from './controllers/domain/patients';
 import { ZodValidationPipe } from './pipes/zod-validation-pipe';
 
 /**
@@ -26,13 +34,18 @@ import { ZodValidationPipe } from './pipes/zod-validation-pipe';
  * `CryptographyModule` — quem precisa verificar token pede a porta, não a lib.
  */
 @Module({
-  imports: [AuthenticationModule, CryptographyModule],
+  imports: [AuthenticationModule, CryptographyModule, PatientsModule],
   controllers: [
     HealthController,
     AuthenticateDoctorController,
     RefreshSessionController,
     RevokeSessionController,
     GetProfileController,
+    RegisterPatientController,
+    ListPatientsController,
+    GetPatientController,
+    UpdatePatientController,
+    AnonymizePatientController,
   ],
   providers: [
     { provide: APP_PIPE, useClass: ZodValidationPipe },

@@ -23,7 +23,7 @@ export const authenticateDoctorSchema = z
     // errada — 401 pelo caso de uso —, não payload malformado.
     password: z.string({ required_error: 'A senha é obrigatória.' }).min(1, 'A senha é obrigatória.'),
   })
-  .strict();
+  .strict('Campo desconhecido no corpo da requisição.');
 
 export class AuthenticateDoctorDto extends createZodDto(authenticateDoctorSchema) {}
 
@@ -42,6 +42,6 @@ export const refreshTokenSchema = z
       .string({ required_error: 'O token de sessão é obrigatório.' })
       .min(1, 'O token de sessão é obrigatório.'),
   })
-  .strict();
+  .strict('Campo desconhecido no corpo da requisição.');
 
 export class RefreshTokenDto extends createZodDto(refreshTokenSchema) {}

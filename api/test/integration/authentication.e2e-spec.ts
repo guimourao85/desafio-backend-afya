@@ -13,6 +13,8 @@ import { RefreshToken } from '@/domains/domain/model-entities/refresh-token.enti
 import { PRONTOMED_POSTGRES_DATA_SOURCE } from '@/shared/constants';
 import { PasswordHasher } from '@/shared/interfaces/cryptography/password-hasher';
 
+import { truncateAll } from '../factories/truncate-all';
+
 const DOCTOR_EMAIL = 'e2e.autenticacao@prontomed.dev';
 const DOCTOR_PASSWORD = 'senha-de-teste-123';
 
@@ -47,7 +49,7 @@ describe('Autenticação (e2e)', () => {
   afterAll(async () => {
     // Deixa o banco de teste como encontrou: suíte que suja o schema faz a próxima
     // passar ou falhar por motivo alheio a ela.
-    await dataSource.query('TRUNCATE TABLE refresh_tokens, doctors');
+    await truncateAll(dataSource);
     await app.close();
   });
 
@@ -57,9 +59,10 @@ describe('Autenticação (e2e)', () => {
     // caso alterasse a linha — `review-testing.md §regras` proíbe compartilhar
     // registro entre testes, e a proibição não depende de o dano já ter ocorrido.
     //
-    // `TRUNCATE` e não `delete({})`, que o TypeORM recusa por critério vazio. As
-    // duas tabelas na mesma instrução: separadas, a FK barraria a primeira.
-    await dataSource.query('TRUNCATE TABLE refresh_tokens, doctors');
+    // `truncateAll` e não `delete({})`, que o TypeORM recusa por critério vazio.
+    // A lista de tabelas vive num lugar só: quando `patients` nasceu, esta suíte
+    // quebrou inteira por FK — e ela não tem nada a ver com pacientes.
+    await truncateAll(dataSource);
 
     const inserted = await dataSource.getRepository(Doctor).insert({
       name: 'Médica de Teste',
@@ -425,7 +428,7 @@ describe('Autenticação (e2e)', () => {
     it('responde 401 quando o token é válido mas o médico não existe mais', async () => {
       const { accessToken } = await login();
 
-      await dataSource.query('TRUNCATE TABLE refresh_tokens, doctors');
+      await truncateAll(dataSource);
 
       const response = await request(app.getHttpServer())
         .get('/api/auth/me')

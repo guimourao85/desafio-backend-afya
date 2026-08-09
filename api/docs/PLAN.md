@@ -340,7 +340,11 @@ CREATE TABLE patients (
   updated_at    timestamptz  NOT NULL DEFAULT now(),
   CONSTRAINT ck_patients_sex    CHECK (sex IS NULL OR sex IN ('MALE','FEMALE','OTHER','UNDISCLOSED')),
   CONSTRAINT ck_patients_height CHECK (height_m  IS NULL OR (height_m  > 0.30 AND height_m  < 2.60)),
-  CONSTRAINT ck_patients_weight CHECK (weight_kg IS NULL OR (weight_kg > 0.50 AND weight_kg < 500))
+  CONSTRAINT ck_patients_weight CHECK (weight_kg IS NULL OR (weight_kg > 0.50 AND weight_kg < 500)),
+  -- Acrescentado na sprint 03.01: `review-database.md §regras` cobra CHECK para
+  -- "data não futura", e o alvo não o tinha. Aceito pelo PG 16 — data passada
+  -- continua passada, então linha válida na inserção nunca vira inválida depois.
+  CONSTRAINT ck_patients_birth_date CHECK (birth_date IS NULL OR birth_date <= CURRENT_DATE)
 );
 CREATE INDEX idx_patients_doctor ON patients (doctor_id);
 
@@ -517,8 +521,18 @@ export abstract class TokenIssuer {
   ): Promise<{ token: string; expiresInSeconds: number }>;
   abstract generateRefreshToken(): string;          // 32 bytes aleatórios, base64url
   abstract hashRefreshToken(token: string): string; // SHA-256 hex (INV-06)
+  abstract verifyAccessToken(                       // `null` = inválido/expirado
+    token: string,
+  ): Promise<{ sub: string; email: string } | null>;
 }
 ```
+
+> **`verifyAccessToken` acrescentado na sprint 02.02 (decisão 1).** A porta emitia
+> sem verificar, e o `JwtAuthGuard` precisa verificar. Sem o método, o guard
+> importaria `@nestjs/jwt` direto e o `CryptographyModule` deixaria de ser o único
+> lugar que conhece a lib. Devolve `null` em vez de lançar: token inválido é
+> resultado esperado de uma requisição, e quem decide o que isso vira em HTTP é o
+> guard, não o adapter.
 
 > **Corrigido na sprint 02.01 (decisão 3).** `issueAccessToken` devolvia
 > `Promise<string>`. O contrato HTTP publica `expiresIn: 900`, e quem conhece o TTL
@@ -537,7 +551,9 @@ export abstract class TokenIssuer {
 Espelhando a referência técnica (`APP_GUARD` no `HttpModule`):
 
 - `JwtAuthGuard` registrado como `APP_GUARD` — **toda rota nasce autenticada**.
-- `@Public()` (decorator + `Reflector`) libera `login`, `refresh`, `health` e `docs`. Rota pública é decisão visível no código, não ausência de configuração.
+- `@Public()` (decorator + `Reflector`) libera `login`, `refresh`, `logout` e `health`. Rota pública é decisão visível no código, não ausência de configuração.
+- **`logout` é pública** (sprint 02.02, decisão 4): sair precisa funcionar justamente quando o access já expirou. Quem apresenta o refresh já o possui — revogá-lo não dá poder novo a ninguém. E `/api/docs` não precisa de `@Public()`: o Swagger é middleware, não rota do Nest, e o guard não o alcança — **verificado ao vivo** no fechamento de 02.02 (`curl /api/docs` → 200 com o guard global no ar).
+- **O logout não derruba o access corrente.** O guard não consulta o banco, então quem já tem um access entra por até 15 min depois de sair. O que o logout garante é que a sessão não se renova (limite declarado em DEBT-11).
 - `@CurrentDoctor()` (param decorator) extrai `request.doctor.id`. **Nenhum service lê `request`** — o controller passa `doctorId` por parâmetro; INV-04 depende disso.
 - Senha com **bcryptjs** (JS puro, sem `node-gyp`), custo 10 — atrás da porta `PasswordHasher` (§8.4).
 - Env validado no boot pelo `ConfigModule.forRoot({ validate })` com Zod: faltou variável, o processo não sobe.
@@ -1031,7 +1047,7 @@ nenhum teste unitário mocka TypeORM — se precisar, há vazamento.
 | cancelar libera o horário; reagendar para lá → 201 | INV-01 | int. |
 | reagendar para horário ocupado → 409 | RF-04 / INV-01 | int. |
 | reagendar ou concluir consulta cancelada → 422 | F4 §3 | unit |
-| **duas requisições concorrentes no mesmo slot → exatamente um 201 e um 409** | ADR-09 | int. |
+| **duas requisições concorrentes no mesmo slot → exatamente um 201 e um 409** | ADR-09 | int. — **sprint de rigor** (06.01), não F4 |
 | anonimizar: PII nula + `anonymized_at` preenchido | RF-08 | unit + int |
 | anonimizar **preserva** contagem de consultas e anotações | INV-03 | int. |
 | anonimizado: novo agendamento → 422; edição → 422 | INV-02 | unit |
@@ -1144,7 +1160,15 @@ Ordem por dependência real. Cada fase termina verde
 4. Controllers + `AppointmentPresenter`; filtro traduz `23505` → 409 `SCHEDULE_CONFLICT`.
 5. Testes: todos os casos de agenda, **incluindo o concorrente**.
 
-**Pronto quando:** duas requisições simultâneas no mesmo slot resultam em exatamente um 201 e um 409.
+**Pronto quando:** agendar duas vezes no mesmo horário (em sequência) devolve 201 e depois **409** — a regra funcionando e demonstrável no `/api/docs`.
+
+> **Corte declarado (decisão do usuário, 09/08/2026).** A **regra** de INV-01 entra
+> aqui: índice único parcial na migration mais a verificação no caso de uso. O
+> **teste de duas requisições simultâneas** (ADR-09, pool com ≥2 conexões, asserção
+> sobre o conjunto) sai para a sprint de rigor, com idempotência e carga — é o teste
+> mais frágil da suíte, e o que ele prova a mais é o comportamento sob corrida, não
+> a existência da regra. O índice único já está lá desde F4: a corrida perde para o
+> banco mesmo sem o teste que a exercita.
 **Commits:** `feat: entidade de agendamento com indice unico parcial` · `feat: agendamento com validacao de conflito` · `feat: listagem com filtros de periodo e paciente` · `feat: reagendamento e cancelamento` · `test: integracao da regra de conflito de agenda`
 
 ---
@@ -1313,6 +1337,7 @@ sobre ele) e **DEBT-07** (nada impede tentar milhares de senhas no login).
 - **`migration:generate` inventa nomes** de constraint quando a entity não os declara (`UQ_a1b2c3…`). Declare na entity (§6.3).
 - **O DataSource instala extensão sozinho, sem migration.** Não é só o `migration:generate`: o DataSource **da aplicação** também instala `uuid-ossp` no `initialize()` quando há coluna `uuid` gerada e falta `uuidExtension` — schema mudando porque alguém reiniciou o processo, que é exatamente o que `migrationsRun: false` existe para impedir. Observado ao vivo na sprint 02.01, em watch mode. Daí a opção estar nos **dois** DataSources (§16.2 item 7).
 - **O gerador não produz FK entre agregados**, porque não há `@ManyToOne` para derivá-la (ADR-04). Ela entra na revisão, à mão, no `up()` e no `down()` (§6.3).
+- ⚠️ **E tenta DERRUBAR as FKs que você escreveu à mão.** Consequência do item acima, descoberta na sprint 03.01: o `migration:generate` compara o schema real com as entities, não encontra decorator que justifique `fk_refresh_tokens_doctors`, e emite `ALTER TABLE … DROP CONSTRAINT` como **primeira linha** do `up()` da migration seguinte — com o `ADD CONSTRAINT` correspondente no `down()`, o que faz o par parecer coerente. Vale para **toda** migration gerada daqui em diante, e cresce a cada FK nova. Na revisão, **apagar essas linhas** antes de comitar; conferir depois com `select conname from pg_constraint where conname like 'fk_%'` que nenhuma sumiu. Comitar sem revisar destrói integridade referencial em silêncio, e o `down()` não denuncia.
 - **Índice parcial só sai se a entity tiver `where`** no `@Index`. Confira o SQL gerado — sem ele, INV-01 fica sem a garantia do banco.
 - **`.strict()` nos schemas Zod**, senão campo desconhecido passa em silêncio.
 - **`nest start --watch` sem swc** (§14.1).
