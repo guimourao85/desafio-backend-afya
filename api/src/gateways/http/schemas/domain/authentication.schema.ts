@@ -26,3 +26,22 @@ export const authenticateDoctorSchema = z
   .strict();
 
 export class AuthenticateDoctorDto extends createZodDto(authenticateDoctorSchema) {}
+
+/**
+ * O corpo de `POST /api/auth/refresh` **e** de `POST /api/auth/logout` — o mesmo
+ * campo nas duas rotas, um schema só. Dois schemas idênticos divergem no dia em
+ * que alguém editar um deles.
+ *
+ * Nada de validar formato do token aqui: ele é opaco por definição, e um `regex`
+ * de base64url só devolveria 400 onde o correto é 401. O que **não** é um token
+ * válido é assunto do caso de uso.
+ */
+export const refreshTokenSchema = z
+  .object({
+    refreshToken: z
+      .string({ required_error: 'O token de sessão é obrigatório.' })
+      .min(1, 'O token de sessão é obrigatório.'),
+  })
+  .strict();
+
+export class RefreshTokenDto extends createZodDto(refreshTokenSchema) {}

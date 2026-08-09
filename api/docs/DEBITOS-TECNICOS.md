@@ -28,10 +28,10 @@
 
 | | ALTO | MÉDIO | BAIXO | Total |
 | --- | --- | --- | --- | --- |
-| **Abertos** | 2 | 7 | 3 | **12** |
+| **Abertos** | 2 | 7 | 4 | **13** |
 | **Resolvidos** | 0 | 0 | 0 | **0** |
 
-Por área: privacidade 1 · domínio 3 · segurança 4 · arquitetura 3 · performance 1.
+Por área: privacidade 1 · domínio 3 · segurança 5 · arquitetura 3 · performance 1.
 <!-- /§visao-geral -->
 
 ---
@@ -111,6 +111,7 @@ O token é opaco, guardado só como SHA-256 e revogável — mas não é trocado
 uso, então não há como detectar que uma cópia está sendo usada em paralelo.
 **Por que fica assim:** o enunciado pede "login/logout, token JWT" como item *desejável*. A versão com rotação exigiria `family_id`, auto-FK `replaced_by`, revogação em cascata, janela de graça para não derrubar sessão legítima por refresh concorrente, e os três testes mais frágeis da suíte — complexidade que o avaliador teria de destrinchar sem que nenhum requisito a peça (ADR-11, [PLAN.md §3.1](PLAN.md)).
 **Mitigação em vigor:** TTL de 8 horas (a sessão morre no fim do turno), `revoked_at` no logout, INV-06 (nunca se grava o token cru).
+**Limite conhecido da mitigação** (sprint 02.02, decisão 18): o logout revoga o *refresh*, não o *access*. O access token é auto-validável e o guard não consulta o banco a cada requisição — então quem já tem um access em mãos continua entrando por até 15 minutos depois do logout. Encurtar essa janela exigiria lista de bloqueio consultada em toda rota, que é a consulta por requisição que o JWT existe para evitar.
 **Gatilho de reabertura:** qualquer exposição fora de `localhost`, ou o primeiro usuário real.
 
 ### DEBT-12 · MÉDIO · arquitetura
@@ -122,6 +123,17 @@ passa a mentir com cara de verdade.
 **Por que fica assim:** mapear constraint → mensagem exige uma tabela de nomes de índice dentro do filtro — nome de objeto de banco vazando para a borda HTTP — para um caso que ainda não existe (o médico nasce por seed, não por endpoint).
 **Mitigação em vigor:** o texto do driver, com o nome da constraint, vai para o log em `warn`: qual índice estourou é sempre recuperável.
 **Gatilho de reabertura:** a segunda constraint `UNIQUE` alcançável por endpoint.
+
+### DEBT-13 · BAIXO · segurança
+**A defesa contra enumeração por cronômetro envelhece em silêncio se o custo do bcrypt subir.**
+O login compara a senha contra um hash descartável quando o email não existe, para
+que os dois caminhos de falha custem o mesmo tempo (sprint 02.01, decisão 14). Esse
+hash é um literal `$2a$10$…` em `authenticate-doctor.service.ts`, e o custo **10**
+está gravado dentro dele. Subir `BCRYPT_ROUNDS` para 12 acelera só o caminho
+"email inexistente" — a diferença volta, menor, e nada avisa.
+**Por que fica assim:** gerar o hash no boot com o custo corrente pagaria um bcrypt no start e guardaria estado no service, para um ambiente onde o valor é 10 e não muda. A alternativa de cobrir isso por teste exigiria asserção sobre tempo — a espécie mais frágil que existe.
+**Mitigação em vigor:** comentário no ponto exato do código dizendo que o literal acompanha `BCRYPT_ROUNDS`.
+**Gatilho de reabertura:** `BCRYPT_ROUNDS` deixar de ser 10.
 <!-- /§abertos -->
 
 ---

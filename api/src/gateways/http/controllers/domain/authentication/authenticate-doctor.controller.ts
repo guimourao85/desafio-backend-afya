@@ -2,6 +2,7 @@ import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags, ApiOkResponse, ApiUnauthorizedResponse } from '@nestjs/swagger';
 
 import { AuthenticateDoctorService } from '@/domains/domain/services/authentication/authenticate-doctor.service';
+import { Public } from '@/framework/authentication/public.decorator';
 import { SessionHttpResponse, SessionPresenter } from '@/presentation/presenters/session.presenter';
 
 import { AuthenticateDoctorDto } from '../../../schemas/domain/authentication.schema';
@@ -11,6 +12,8 @@ import { AuthenticateDoctorDto } from '../../../schemas/domain/authentication.sc
 export class AuthenticateDoctorController {
   constructor(private readonly authenticateDoctor: AuthenticateDoctorService) {}
 
+  // Pública pelo óbvio: é onde a sessão nasce. Sem isto, ninguém entra nunca.
+  @Public()
   @Post('login')
   // O `@Post()` do Nest responde 201 por padrão. Login não cria recurso: abre sessão.
   @HttpCode(HttpStatus.OK)

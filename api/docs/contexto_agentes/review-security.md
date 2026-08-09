@@ -87,7 +87,12 @@ O defeito mais provável deste sistema. Para **cada** método de repositório e
 
 ### 5. Superfície HTTP e segredos
 
-- **`JwtAuthGuard` é `APP_GUARD` global** — toda rota nasce autenticada. Rota pública só com `@Public()` **explícito** e justificado (`/api/health`, `/api/docs`, `/api/auth/login`, `/api/auth/refresh`). `@Public()` novo sem justificativa é **ALTO**.
+- **`JwtAuthGuard` é `APP_GUARD` global** — toda rota nasce autenticada. Rota pública só com `@Public()` **explícito** e justificado (`/api/health`, `/api/docs`, `/api/auth/login`, `/api/auth/refresh` e **`/api/auth/logout`**). `@Public()` novo sem justificativa é **ALTO**.
+
+> **Por que `logout` é pública** (sprint 02.02, decisão 4): ela precisa funcionar
+> justamente quando o access já expirou — que é quando o usuário mais quer sair.
+> Exigir sessão válida para encerrar sessão deixa a sessão viva por não conseguir
+> morrer. Quem apresenta o refresh já o possui; revogá-lo não dá poder novo a ninguém.
 - Guard removido ou sobrescrito em controller específico: **CRÍTICO** se não houver razão declarada.
 - CORS restrito ao necessário para o ambiente de desenvolvimento.
 - Schema Zod com `.strict()` e `ZodValidationPipe` **global** (`APP_PIPE`) — validação por rota é opcional, e validação opcional é validação ausente.

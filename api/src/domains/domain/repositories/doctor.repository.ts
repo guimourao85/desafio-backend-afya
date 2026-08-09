@@ -11,4 +11,10 @@ import { Doctor } from '../model-entities/doctor.entity';
 export interface DoctorRepository {
   /** O email chega **já normalizado** pela borda — a comparação é literal. */
   findByEmail(email: string): Promise<Doctor | null>;
+
+  /**
+   * Busca pelo `sub` do token. Sem filtro por dono: o médico **é** o dono, e
+   * INV-04 fala de escopar dado de terceiros — não de o médico se ler.
+   */
+  findById(id: string): Promise<Doctor | null>;
 }

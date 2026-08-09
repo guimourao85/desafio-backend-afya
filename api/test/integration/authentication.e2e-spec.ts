@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import { INestApplication } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
@@ -210,6 +211,229 @@ describe('Autenticação (e2e)', () => {
       await expect(dataSource.getRepository(RefreshToken).insert(orfao)).rejects.toThrow(
         /fk_refresh_tokens_doctors/,
       );
+    });
+  });
+
+  /** Abre uma sessão de verdade — é o insumo de todo caso de 02.02. */
+  async function login(): Promise<{ accessToken: string; refreshToken: string }> {
+    const response = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({ email: DOCTOR_EMAIL, password: DOCTOR_PASSWORD });
+
+    return response.body as { accessToken: string; refreshToken: string };
+  }
+
+  describe('POST /api/auth/refresh', () => {
+    it('devolve um novo access token e **não** repete o refresh no corpo', async () => {
+      const { refreshToken } = await login();
+
+      const response = await request(app.getHttpServer())
+        .post('/api/auth/refresh')
+        .send({ refreshToken });
+
+      expect(response.status).toBe(200);
+      // Igualdade de chaves: sem rotação, devolver o refresh sugeriria que ele mudou.
+      expect(Object.keys(response.body).sort()).toEqual(['accessToken', 'expiresIn']);
+      expect(response.body.expiresIn).toBe(900);
+    });
+
+    it('o access renovado abre uma rota protegida', async () => {
+      const { refreshToken } = await login();
+
+      const renovado = await request(app.getHttpServer())
+        .post('/api/auth/refresh')
+        .send({ refreshToken });
+
+      const perfil = await request(app.getHttpServer())
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${renovado.body.accessToken}`);
+
+      expect(perfil.status).toBe(200);
+      expect(perfil.body.id).toBe(doctorId);
+    });
+
+    it('não rotaciona: duas renovações concorrentes devolvem dois access válidos', async () => {
+      const { refreshToken } = await login();
+
+      const [primeira, segunda] = await Promise.all([
+        request(app.getHttpServer()).post('/api/auth/refresh').send({ refreshToken }),
+        request(app.getHttpServer()).post('/api/auth/refresh').send({ refreshToken }),
+      ]);
+
+      expect([primeira.status, segunda.status]).toEqual([200, 200]);
+      // A sessão continua uma só, viva: nada foi criado nem revogado.
+      expect(await dataSource.getRepository(RefreshToken).count()).toBe(1);
+    });
+
+    it('responde igual para refresh desconhecido, revogado e expirado', async () => {
+      const { refreshToken: revogado } = await login();
+      await request(app.getHttpServer()).post('/api/auth/logout').send({ refreshToken: revogado });
+
+      // Expirado: a linha nasce com data no passado. Fake timer não serve — quem
+      // compara é o `now()` do Postgres, não o relógio deste processo.
+      const expirado = 'refresh-expirado-de-teste';
+      await dataSource.getRepository(RefreshToken).insert({
+        doctorId,
+        tokenHash: createHash('sha256').update(expirado).digest('hex'),
+        expiresAt: new Date('2020-01-01T00:00:00.000Z'),
+        revokedAt: null,
+      });
+
+      const respostas = await Promise.all(
+        [revogado, expirado, 'token-que-nunca-existiu'].map((refreshToken) =>
+          request(app.getHttpServer()).post('/api/auth/refresh').send({ refreshToken }),
+        ),
+      );
+
+      for (const resposta of respostas) {
+        expect(resposta.status).toBe(401);
+        expect(resposta.body).toEqual({
+          statusCode: 401,
+          code: 'INVALID_REFRESH_TOKEN',
+          message: 'Sessão expirada. Faça login novamente.',
+        });
+      }
+    });
+  });
+
+  describe('POST /api/auth/logout', () => {
+    it('responde 204 sem corpo e marca `revoked_at` no banco', async () => {
+      const { refreshToken } = await login();
+
+      const response = await request(app.getHttpServer())
+        .post('/api/auth/logout')
+        .send({ refreshToken });
+
+      expect(response.status).toBe(204);
+      expect(response.body).toEqual({});
+
+      const [row] = (await dataSource.query('SELECT revoked_at FROM refresh_tokens')) as {
+        revoked_at: Date | null;
+      }[];
+
+      expect(row.revoked_at).not.toBeNull();
+    });
+
+    it('responde 204 para token desconhecido — logout nunca falha', async () => {
+      const response = await request(app.getHttpServer())
+        .post('/api/auth/logout')
+        .send({ refreshToken: 'token-que-nunca-existiu' });
+
+      expect(response.status).toBe(204);
+    });
+
+    it('é idempotente: a segunda chamada responde 204 e não reescreve `revoked_at`', async () => {
+      const { refreshToken } = await login();
+
+      await request(app.getHttpServer()).post('/api/auth/logout').send({ refreshToken });
+      const [primeira] = (await dataSource.query('SELECT revoked_at FROM refresh_tokens')) as {
+        revoked_at: Date;
+      }[];
+
+      const segunda = await request(app.getHttpServer())
+        .post('/api/auth/logout')
+        .send({ refreshToken });
+      const [depois] = (await dataSource.query('SELECT revoked_at FROM refresh_tokens')) as {
+        revoked_at: Date;
+      }[];
+
+      expect(segunda.status).toBe(204);
+      // O instante da **primeira** revogação é o que a linha continua contando.
+      expect(depois.revoked_at).toEqual(primeira.revoked_at);
+    });
+
+    it('responde 400 quando o corpo vem sem `refreshToken` — o 204 é sobre o token, não sobre o payload', async () => {
+      const response = await request(app.getHttpServer()).post('/api/auth/logout').send({});
+
+      expect(response.status).toBe(400);
+      expect(response.body.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('não derruba o access corrente: ele segue abrindo rota protegida até expirar', async () => {
+      const { accessToken, refreshToken } = await login();
+
+      await request(app.getHttpServer()).post('/api/auth/logout').send({ refreshToken });
+
+      const perfil = await request(app.getHttpServer())
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      // Comportamento declarado (DEBT-11), não defeito: o logout impede a
+      // renovação, e o access morre sozinho em ≤ 15 min.
+      expect(perfil.status).toBe(200);
+    });
+  });
+
+  describe('GET /api/auth/me', () => {
+    it('devolve id, nome e email — e nada mais (INV-07)', async () => {
+      const { accessToken } = await login();
+
+      const response = await request(app.getHttpServer())
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        id: doctorId,
+        name: 'Médica de Teste',
+        email: DOCTOR_EMAIL,
+      });
+    });
+
+    it.each([
+      ['sem header Authorization', undefined],
+      ['sem o esquema Bearer', 'apenas-o-token'],
+      ['com esquema errado', 'Basic YWJjOjEyMw=='],
+      ['com token que não é JWT', 'Bearer nao-e-um-jwt'],
+    ])('responde 401 %s', async (_caso, authorization) => {
+      const requisicao = request(app.getHttpServer()).get('/api/auth/me');
+
+      if (authorization) requisicao.set('Authorization', authorization);
+
+      const response = await requisicao;
+
+      expect(response.status).toBe(401);
+      expect(response.body).toEqual({
+        statusCode: 401,
+        code: 'UNAUTHENTICATED',
+        message: 'Autenticação necessária.',
+      });
+    });
+
+    it('responde 401 para token expirado e para token de outro segredo', async () => {
+      const jwtService = app.get(JwtService);
+
+      const expirado = await jwtService.signAsync(
+        { sub: doctorId, email: DOCTOR_EMAIL },
+        { expiresIn: '-1s' },
+      );
+      const outroSegredo = await jwtService.signAsync(
+        { sub: doctorId, email: DOCTOR_EMAIL },
+        { secret: 'um-segredo-que-nao-e-o-desta-api-1234' },
+      );
+
+      for (const token of [expirado, outroSegredo]) {
+        const response = await request(app.getHttpServer())
+          .get('/api/auth/me')
+          .set('Authorization', `Bearer ${token}`);
+
+        expect(response.status).toBe(401);
+        expect(response.body.code).toBe('UNAUTHENTICATED');
+      }
+    });
+
+    it('responde 401 quando o token é válido mas o médico não existe mais', async () => {
+      const { accessToken } = await login();
+
+      await dataSource.query('TRUNCATE TABLE refresh_tokens, doctors');
+
+      const response = await request(app.getHttpServer())
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      // 401 e não 404: quem sumiu é o dono da sessão, não um recurso de terceiro.
+      expect(response.status).toBe(401);
+      expect(response.body.code).toBe('UNAUTHENTICATED');
     });
   });
 });

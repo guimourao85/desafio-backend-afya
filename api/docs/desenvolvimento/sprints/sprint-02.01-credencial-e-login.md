@@ -14,7 +14,7 @@
 > **Plano canônico:** [PLAN.md §13 — F2](../../PLAN.md) · **Estado:** [PRODUCT.md §roadmap](../../PRODUCT.md) · **Formato:** [SPRINT-TEMPLATE.md](../../SPRINT-TEMPLATE.md)
 
 **Branch:** `main` · **Início:** 2026-08-07 · **Fase:** F2 (parte 1 de 2)
-**Status:** ✅ fechada em 2026-08-07 — **fricção PRÉ e PÓS aprovadas** (9/10 nos quatro agentes em ambas). 8 issues registrados; 3 achados PÓS corrigidos antes do fechamento
+**Status:** ✅ fechada em 2026-08-08 — **fricção PRÉ e PÓS aprovadas** (9/10 nos quatro agentes em ambas). 8 issues registrados; 3 achados PÓS corrigidos antes do fechamento
 **Triagem:** COMPLEXO (≈22 arquivos, primeira migration, agregado novo, cripto) → plano + fricção PRÉ ≥9/10 + aprovação + implementar + fricção PÓS
 **Agentes:** `[Backend]` `[Dominio]` (no limite) · `[Database]` `[Seguranca]` `[QA]` (obrigatórios, fora do limite)
 
@@ -403,6 +403,20 @@ porta → adapter → service → HTTP → seed → teste.
 **Commits sugeridos** (PLAN §13 F2): `feat: entidades de medico e sessao` ·
 `feat: migration de autenticacao` · `feat: portas de hash de senha e emissao de token` ·
 `feat: login com access e refresh token`
+
+**Commits reais** (2026-08-08) — três, não quatro: entity e migration nasceram
+juntas porque a migration é *gerada a partir* da entity, e separá-las produziria um
+commit que não compila contra o banco.
+
+| SHA | Mensagem |
+| --- | --- |
+| `8d80ccb` | `feat: tabelas de medico e sessao no banco` |
+| `a24b7ee` | `feat: senha e token com criptografia isolada` |
+| `3f0407f` | `feat: login do medico` |
+
+> **Linguagem dos commits:** decisão do usuário no fechamento — a mensagem é lida
+> por quem avalia o produto, não só por quem escreveu o código. Direta, sem jargão
+> de camada. Vale de 02.02 em diante.
 <!-- /§escopo -->
 
 ---

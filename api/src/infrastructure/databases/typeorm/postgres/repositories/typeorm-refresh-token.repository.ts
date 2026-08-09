@@ -25,4 +25,34 @@ export class TypeOrmRefreshTokenRepository implements RefreshTokenRepository {
     // atualizar. Aqui a decisão já está tomada, e a ida a mais ao banco não paga nada.
     await this.repository.insert(data);
   }
+
+  /**
+   * `QueryBuilder` e não `findOne` por causa do `now()`: `MoreThan(new Date())`
+   * compararia com o relógio do **processo**, e a coluna foi escrita com o relógio
+   * do **banco**. Duas fontes de tempo para uma pergunta só é como se aceita um
+   * token vencido em um servidor e se recusa no outro.
+   */
+  findValidByHash(hash: string): Promise<RefreshToken | null> {
+    return this.repository
+      .createQueryBuilder('refreshToken')
+      // Com alias, o nome é o da **propriedade** — o TypeORM traduz para a coluna.
+      .where('refreshToken.tokenHash = :hash', { hash })
+      .andWhere('refreshToken.revokedAt IS NULL')
+      .andWhere('refreshToken.expiresAt > now()')
+      .getOne();
+  }
+
+  async revokeByHash(hash: string): Promise<void> {
+    await this.repository
+      .createQueryBuilder()
+      .update(RefreshToken)
+      // `() => 'now()'` grava o instante do banco, e não o do processo.
+      .set({ revokedAt: () => 'now()' })
+      // No `UPDATE` não há alias: aqui o nome é o da **coluna**, não o da propriedade.
+      .where('token_hash = :hash', { hash })
+      // Preserva o instante da primeira revogação: logout repetido não reescreve
+      // a data, e a linha continua contando a verdade sobre quando a sessão morreu.
+      .andWhere('revoked_at IS NULL')
+      .execute();
+  }
 }

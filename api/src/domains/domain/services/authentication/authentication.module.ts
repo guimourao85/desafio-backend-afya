@@ -4,6 +4,9 @@ import { CryptographyModule } from '@/framework/cryptography/cryptography.module
 
 import { AuthenticateDoctorService } from './authenticate-doctor.service';
 import { authenticationProviders } from './authentication.provider';
+import { GetProfileService } from './get-profile.service';
+import { RefreshSessionService } from './refresh-session.service';
+import { RevokeSessionService } from './revoke-session.service';
 
 /**
  * O contexto de autenticação: médico e sessão.
@@ -15,7 +18,18 @@ import { authenticationProviders } from './authentication.provider';
  */
 @Module({
   imports: [CryptographyModule],
-  providers: [...authenticationProviders, AuthenticateDoctorService],
-  exports: [AuthenticateDoctorService],
+  providers: [
+    ...authenticationProviders,
+    AuthenticateDoctorService,
+    RefreshSessionService,
+    RevokeSessionService,
+    GetProfileService,
+  ],
+  exports: [
+    AuthenticateDoctorService,
+    RefreshSessionService,
+    RevokeSessionService,
+    GetProfileService,
+  ],
 })
 export class AuthenticationModule {}

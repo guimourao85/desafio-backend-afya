@@ -19,4 +19,8 @@ export class TypeOrmDoctorRepository implements DoctorRepository {
   findByEmail(email: string): Promise<Doctor | null> {
     return this.repository.findOne({ where: { email } });
   }
+
+  findById(id: string): Promise<Doctor | null> {
+    return this.repository.findOne({ where: { id } });
+  }
 }

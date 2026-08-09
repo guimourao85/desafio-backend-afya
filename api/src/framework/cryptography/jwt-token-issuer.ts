@@ -47,4 +47,22 @@ export class JwtTokenIssuer implements TokenIssuer {
   hashRefreshToken(token: string): string {
     return createHash('sha256').update(token).digest('hex');
   }
+
+  async verifyAccessToken(token: string): Promise<AccessTokenPayload | null> {
+    try {
+      // Sem `options`: o segredo vem do `JwtModule.registerAsync`, o mesmo caminho
+      // que o `signAsync` acima já usa. Nenhum segredo é lido fora daquele módulo.
+      const { sub, email } = await this.jwtService.verifyAsync<AccessTokenPayload>(token);
+
+      // Devolve só o que o payload publica. `exp` e `iat` ficam no token: quem
+      // consome a porta não tem o que fazer com eles, e carregá-los adiante
+      // convidaria alguém a reimplementar a expiração por fora.
+      return { sub, email };
+    } catch {
+      // `verifyAsync` lança tanto para assinatura errada quanto para expirado. A
+      // porta não distingue de propósito — a resposta HTTP é a mesma, e distinguir
+      // daria ao cliente um oráculo sobre o que exatamente falhou.
+      return null;
+    }
+  }
 }

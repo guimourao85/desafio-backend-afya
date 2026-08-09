@@ -30,4 +30,14 @@ export abstract class TokenIssuer {
 
   /** SHA-256 hex — a única forma do refresh que pode tocar o banco (INV-06). */
   abstract hashRefreshToken(token: string): string;
+
+  /**
+   * Verifica assinatura e expiração do access token.
+   *
+   * Devolve `null` — não lança — para token ausente, malformado, expirado ou
+   * assinado com outro segredo: numa rota pública mal chamada, token inválido é
+   * resultado esperado, não defeito. Quem decide o que isso vira em HTTP é o
+   * guard, não o adapter.
+   */
+  abstract verifyAccessToken(token: string): Promise<AccessTokenPayload | null>;
 }

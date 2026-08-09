@@ -11,6 +11,7 @@ import {
 } from '@/shared/interfaces/cryptography/token-issuer';
 
 import { Doctor } from '../../model-entities/doctor.entity';
+import { RefreshToken } from '../../model-entities/refresh-token.entity';
 import { DoctorRepository } from '../../repositories/doctor.repository';
 import {
   CreateRefreshTokenData,
@@ -34,13 +35,41 @@ class InMemoryDoctorRepository implements DoctorRepository {
   async findByEmail(email: string): Promise<Doctor | null> {
     return this.items.find((doctor) => doctor.email === email) ?? null;
   }
+
+  async findById(id: string): Promise<Doctor | null> {
+    return this.items.find((doctor) => doctor.id === id) ?? null;
+  }
 }
 
+/**
+ * Implementa a porta **inteira**, mesmo que este arquivo só exercite `create`: o
+ * duplo satisfaz o mesmo contrato do adapter real, inclusive na parte que ignora
+ * revogado e expirado. Duplo que atende metade da porta passa a mentir no dia em
+ * que o service crescer.
+ */
 class InMemoryRefreshTokenRepository implements RefreshTokenRepository {
   readonly items: CreateRefreshTokenData[] = [];
+  readonly revokedHashes: string[] = [];
 
   async create(data: CreateRefreshTokenData): Promise<void> {
     this.items.push(data);
+  }
+
+  async findValidByHash(hash: string): Promise<RefreshToken | null> {
+    const stored = this.items.find(
+      (item) =>
+        item.tokenHash === hash &&
+        item.expiresAt > new Date() &&
+        !this.revokedHashes.includes(hash),
+    );
+
+    return stored ? Object.assign(new RefreshToken(), { ...stored, revokedAt: null }) : null;
+  }
+
+  async revokeByHash(hash: string): Promise<void> {
+    if (!this.revokedHashes.includes(hash)) {
+      this.revokedHashes.push(hash);
+    }
   }
 }
 
@@ -82,6 +111,12 @@ class FakeTokenIssuer implements TokenIssuer {
    */
   hashRefreshToken(token: string): string {
     return Buffer.from(token).toString('hex');
+  }
+
+  /** Não exercitado aqui — o login não verifica access token. Existe para o duplo
+   *  satisfazer a porta inteira. */
+  async verifyAccessToken(token: string): Promise<AccessTokenPayload | null> {
+    return token === 'access-token' ? { sub: 'doctor-id', email: 'doctor@prontomed.dev' } : null;
   }
 }
 
