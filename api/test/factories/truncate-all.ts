@@ -14,5 +14,5 @@ import { DataSource } from 'typeorm';
  * que a lista não menciona, e um dia apagaria uma tabela que alguém queria manter.
  */
 export async function truncateAll(dataSource: DataSource): Promise<void> {
-  await dataSource.query('TRUNCATE TABLE patients, refresh_tokens, doctors');
+  await dataSource.query('TRUNCATE TABLE appointments, patients, refresh_tokens, doctors');
 }

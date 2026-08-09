@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_PIPE } from '@nestjs/core';
 
 import { AuthenticationModule } from '@/domains/domain/services/authentication/authentication.module';
+import { AppointmentsModule } from '@/domains/domain/services/appointments/appointments.module';
 import { PatientsModule } from '@/domains/domain/services/patients/patients.module';
 import { JwtAuthGuard } from '@/framework/authentication/jwt-auth.guard';
 import { CryptographyModule } from '@/framework/cryptography/cryptography.module';
@@ -13,6 +14,13 @@ import {
   RefreshSessionController,
   RevokeSessionController,
 } from './controllers/domain/authentication';
+import {
+  CancelAppointmentController,
+  GetAppointmentController,
+  ListAppointmentsController,
+  ScheduleAppointmentController,
+  UpdateAppointmentController,
+} from './controllers/domain/appointments';
 import {
   AnonymizePatientController,
   GetPatientController,
@@ -34,7 +42,7 @@ import { ZodValidationPipe } from './pipes/zod-validation-pipe';
  * `CryptographyModule` — quem precisa verificar token pede a porta, não a lib.
  */
 @Module({
-  imports: [AuthenticationModule, CryptographyModule, PatientsModule],
+  imports: [AuthenticationModule, CryptographyModule, PatientsModule, AppointmentsModule],
   controllers: [
     HealthController,
     AuthenticateDoctorController,
@@ -46,6 +54,11 @@ import { ZodValidationPipe } from './pipes/zod-validation-pipe';
     GetPatientController,
     UpdatePatientController,
     AnonymizePatientController,
+    ScheduleAppointmentController,
+    ListAppointmentsController,
+    GetAppointmentController,
+    UpdateAppointmentController,
+    CancelAppointmentController,
   ],
   providers: [
     { provide: APP_PIPE, useClass: ZodValidationPipe },

@@ -10,6 +10,8 @@ import { ANONYMIZED_PATIENT_NAME, Patient } from '@/domains/domain/model-entitie
 import { PRONTOMED_POSTGRES_DATA_SOURCE } from '@/shared/constants';
 import { PasswordHasher } from '@/shared/interfaces/cryptography/password-hasher';
 
+import { truncateAll } from '../factories/truncate-all';
+
 const PASSWORD = 'senha-de-teste-123';
 const OWNER_EMAIL = 'e2e.dono@prontomed.dev';
 const OTHER_EMAIL = 'e2e.outro@prontomed.dev';
@@ -42,13 +44,15 @@ describe('Pacientes (e2e)', () => {
   });
 
   afterAll(async () => {
-    await dataSource.query('TRUNCATE TABLE patients, refresh_tokens, doctors');
+    await truncateAll(dataSource);
     await app.close();
   });
 
   beforeEach(async () => {
-    // `patients` primeiro: a FK barraria a remoção de `doctors` antes dela.
-    await dataSource.query('TRUNCATE TABLE patients, refresh_tokens, doctors');
+    // Pelo helper, não à mão: quando `appointments` nasceu, o `TRUNCATE` inline
+    // desta suíte quebrou por FK — exatamente o que `truncateAll` existe para
+    // evitar, e que a suíte de autenticação atravessou sem uma linha de mudança.
+    await truncateAll(dataSource);
 
     const doctors = dataSource.getRepository(Doctor);
     ownerId = (

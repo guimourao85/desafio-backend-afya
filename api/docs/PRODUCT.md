@@ -189,6 +189,9 @@ quando não pode.
 | **Editar** paciente anonimizado              | 422 `BUSINESS_RULE_VIOLATION` | "Paciente anonimizado (LGPD) não pode ser editado."                |
 | Campo desconhecido no corpo                  | 400 `VALIDATION_ERROR`        | "Campo desconhecido no corpo da requisição."                       |
 | Anotar em consulta cancelada                 | 422 `BUSINESS_RULE_VIOLATION` | "Consulta cancelada não aceita anotações."                         |
+| Reagendar consulta cancelada ou concluída    | 422 `BUSINESS_RULE_VIOLATION` | "Consulta cancelada ou concluída não pode ser reagendada."          |
+| Concluir consulta não agendada               | 422 `BUSINESS_RULE_VIOLATION` | "Só uma consulta agendada pode ser concluída."                      |
+| Cancelar consulta já concluída               | 422 `BUSINESS_RULE_VIOLATION` | "Consulta já concluída não pode ser cancelada."                     |
 | Recurso de outro médico, ou inexistente      | 404 `RESOURCE_NOT_FOUND`      | "Paciente não encontrado." / "Agendamento não encontrado."         |
 | Campo com formato inválido ou desconhecido   | 400 `VALIDATION_ERROR`        | "Dados inválidos." + `details[]` por campo                         |
 | Refresh inexistente, expirado ou já revogado | 401 `INVALID_REFRESH_TOKEN`   | "Sessão expirada. Faça login novamente."                           |
@@ -290,7 +293,7 @@ sub-doc de sprint. Esta tabela é a única amarração canônica sprint ↔ fase
 | 02.01  | F2 (1/2)    | Credencial e login: `doctors`, `refresh_tokens`, primeira migration, cripto e `POST /auth/login`    | [sprint-02.01](desenvolvimento/sprints/sprint-02.01-credencial-e-login.md) | ✅     |
 | 02.02  | F2 (2/2)    | Rotas protegidas: `JwtAuthGuard` global, `@Public()`, `@CurrentDoctor()`, `refresh`, `logout`, `me` | [sprint-02.02](desenvolvimento/sprints/sprint-02.02-rotas-protegidas.md)   | ✅     |
 | 03.01  | F3          | `patients`: cadastro, listagem, edição, anonimização LGPD                                           | [sprint-03.01](desenvolvimento/sprints/sprint-03.01-pacientes.md)          | ✅     |
-| 04.01  | F4          | `appointments`: agenda com recusa de conflito, reagendamento, cancelamento                          | —                                                                          | ⬜     |
+| 04.01  | F4          | `appointments`: agenda com recusa de conflito, reagendamento, cancelamento                          | [sprint-04.01](desenvolvimento/sprints/sprint-04.01-agenda.md)                                                                          | ✅     |
 | 04.02  | F5          | `appointments`: anotações e linha do tempo do paciente                                              | —                                                                          | ⬜     |
 | 05.01  | F6          | Swagger navegável a partir dos schemas Zod + seed de demonstração                                   | —                                                                          | ⬜     |
 | 05.02  | F7          | README para o avaliador, ER, pipeline de CI                                                         | —                                                                          | ⬜     |

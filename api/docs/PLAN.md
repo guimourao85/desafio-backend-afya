@@ -361,7 +361,9 @@ CREATE TABLE appointments (
 -- INV-01: a agenda do médico não admite dois compromissos vivos no mesmo instante
 CREATE UNIQUE INDEX uk_appointments_doctor_slot
   ON appointments (doctor_id, scheduled_at) WHERE status <> 'CANCELLED';
-CREATE INDEX idx_appointments_patient ON appointments (patient_id, scheduled_at DESC);
+-- Sem `DESC`: `IndexOptions` do TypeORM não expressa direção por coluna, e o
+-- Postgres varre btree para trás com o mesmo custo (sprint 04.01, decisão 22).
+CREATE INDEX idx_appointments_patient ON appointments (patient_id, scheduled_at);
 
 CREATE TABLE consultation_notes (
   id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -809,10 +811,15 @@ export class Appointment {
   @OneToMany(() => ConsultationNote, (n) => n.appointment, { cascade: ['insert'] })
   notes?: ConsultationNote[];              // ← DENTRO do agregado: relação permitida
 
-  isActive(): boolean { return this.status !== AppointmentStatus.CANCELLED; }
-  cancel(): void      { this.status = AppointmentStatus.CANCELLED; }
-  complete(): void    { this.status = AppointmentStatus.COMPLETED; }
-  rescheduleTo(d: Date): void { this.scheduledAt = d; }
+  isActive(): boolean   { return this.status !== AppointmentStatus.CANCELLED; }
+  isTerminal(): boolean { return this.status !== AppointmentStatus.SCHEDULED; }
+
+  // Os guardas devolvem `Either` (sprint 04.01, decisões 6 e 23): estado terminal
+  // recusa reagendar e concluir. `cancel()` é assimétrico — no-op se já cancelada,
+  // recusa se concluída, porque cancelar o que foi atendido apagaria o registro.
+  rescheduleTo(d: Date): Either<BusinessRuleViolationError, void>
+  complete(): Either<BusinessRuleViolationError, void>
+  cancel(): Either<BusinessRuleViolationError, void>
 
   /** INV-05: a anotação só entra pela raiz do agregado, e só se a consulta está viva. */
   addNote(content: string): Either<BusinessRuleViolationError, ConsultationNote> {
@@ -1337,6 +1344,7 @@ sobre ele) e **DEBT-07** (nada impede tentar milhares de senhas no login).
 - **`migration:generate` inventa nomes** de constraint quando a entity não os declara (`UQ_a1b2c3…`). Declare na entity (§6.3).
 - **O DataSource instala extensão sozinho, sem migration.** Não é só o `migration:generate`: o DataSource **da aplicação** também instala `uuid-ossp` no `initialize()` quando há coluna `uuid` gerada e falta `uuidExtension` — schema mudando porque alguém reiniciou o processo, que é exatamente o que `migrationsRun: false` existe para impedir. Observado ao vivo na sprint 02.01, em watch mode. Daí a opção estar nos **dois** DataSources (§16.2 item 7).
 - **O gerador não produz FK entre agregados**, porque não há `@ManyToOne` para derivá-la (ADR-04). Ela entra na revisão, à mão, no `up()` e no `down()` (§6.3).
+- ⚠️ **Entity não usa o alias `@/`.** Descoberto na sprint 04.01: o `typeorm-ts-node-commonjs` do `migration:generate` carrega as entities **fora do runtime do Nest**, sem `tsconfig-paths` — qualquer `import '@/…'` numa entity mata a geração com `Cannot find module`. Dentro de `model-entities/` o import é **relativo**. A aplicação continua funcionando normalmente com o alias, o que torna a falha invisível até alguém gerar uma migration.
 - ⚠️ **E tenta DERRUBAR as FKs que você escreveu à mão.** Consequência do item acima, descoberta na sprint 03.01: o `migration:generate` compara o schema real com as entities, não encontra decorator que justifique `fk_refresh_tokens_doctors`, e emite `ALTER TABLE … DROP CONSTRAINT` como **primeira linha** do `up()` da migration seguinte — com o `ADD CONSTRAINT` correspondente no `down()`, o que faz o par parecer coerente. Vale para **toda** migration gerada daqui em diante, e cresce a cada FK nova. Na revisão, **apagar essas linhas** antes de comitar; conferir depois com `select conname from pg_constraint where conname like 'fk_%'` que nenhuma sumiu. Comitar sem revisar destrói integridade referencial em silêncio, e o `down()` não denuncia.
 - **Índice parcial só sai se a entity tiver `where`** no `@Index`. Confira o SQL gerado — sem ele, INV-01 fica sem a garantia do banco.
 - **`.strict()` nos schemas Zod**, senão campo desconhecido passa em silêncio.
