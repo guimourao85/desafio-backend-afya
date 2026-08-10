@@ -154,20 +154,45 @@ escopo por médico em toda leitura (INV-04), a separação em camadas com portas
 adapters, o Zod como fonte única de validação e Swagger, e o teste que rastreia
 requisito. São os itens que o próprio PDF diz que vai avaliar.
 
-> **A regra de INV-01 é inegociável; a prova sob corrida está adiada, não cortada.**
-> O teste de duas requisições simultâneas (ADR-09) saiu de F4 por decisão do usuário
-> em 09/08/2026 e vive na sprint 06.01 ([PRODUCT.md §roadmap](PRODUCT.md)) — a
-> última da fila. Enquanto 06.01 não fechar, o que está provado é que a regra
-> **existe** (índice no banco + rejeição no service, testados), não que ela
-> **segura a corrida**. Se 06.01 cair por tempo, é este parágrafo que registra o
-> que ficou sem prova — não um silêncio.
-
 **O que o prisma já cortou:** rotação de refresh · `@nestjs/terminus` no
 healthcheck · interceptor de logging com correlation-id · a rota redundante de
 anotações · **o pipeline de CI (RNF-12, Desejável — decisão do usuário em
 10/08/2026, sem débito: um pipeline que ninguém mantém numa POC avaliada
 localmente é cerimônia)**. Cada corte tem linha no ledger ou nota no lugar onde a
 decisão se aplica — corte silencioso vira buraco, corte declarado vira decisão.
+
+### 3.2 Regra de escopo: prova sob corrida, volume e retry
+
+**Sprint de feature entrega a regra. A prova sob estresse é de sprint dedicada.**
+
+Sprint de feature entrega o caso de uso, a constraint e o teste determinístico que
+mostram que a regra **existe**. A prova de que ela sobrevive a **concorrência**,
+**volume** e **retry** não entra ali: vive na sprint **06.01**
+([sub-doc](desenvolvimento/sprints/sprint-06.01-concorrencia-idempotencia-e-carga.md)),
+a última da fila. Decisão do usuário em 09/08/2026 para o teste concorrente do slot,
+estendida a toda a classe de prova em 10/08/2026.
+
+**Esta seção é a fonte única.** Em conflito com qualquer outro ponto, **ela vence**.
+
+Os documentos **vivos** apontam para cá: `§12.4`, `§13 F4`,
+[PRODUCT.md §invariantes](PRODUCT.md) e `contexto_agentes/review-testing.md`.
+Os **sub-docs de sprint fechada** (04.01, 04.02) declaram o adiamento com as
+palavras da época e **ficam como estão** — sprint-doc é registro de execução, e
+reescrever o que já foi executado apaga o rastro em vez de corrigi-lo. Quem quiser
+a regra lê aqui; quem quiser a decisão no contexto dela lê lá.
+
+**Por quê:** são os testes mais frágeis da suíte — dependem de pool de conexões, de
+relógio e de ausência de ordem garantida. O que eles provam a mais é o
+comportamento **sob estresse**, não a existência da regra. Diluídos numa sprint de
+feature, cobram o custo da flakiness de quem estava entregando outra coisa; juntos,
+são revisados como o que são.
+
+> **O preço, declarado.** Até a 06.01 fechar, o que este projeto entrega são CRUDs
+> corretos e **não provados sob corrida nem sob volume**. Para INV-01
+> especificamente: está provado que a regra **existe** (índice único parcial no
+> banco **+** rejeição no caso de uso, ambos testados), **não** que ela **segura a
+> corrida**. Se a 06.01 cair por tempo, é este parágrafo que registra o que ficou
+> sem prova — não um silêncio.
 
 ---
 
@@ -603,15 +628,15 @@ Tudo autenticado, exceto o que tem `@Public()`.
 | `GET` | `/api/auth/me` | perfil autenticado | 200 | 401 |
 | `POST` | `/api/patients` | RF-01 | 201 | 400, 401 |
 | `GET` | `/api/patients` | RF-02 · `?search=&page=&perPage=` | 200 | 400, 401 |
-| `GET` | `/api/patients/:id` | detalhe | 200 | 401, 404 |
+| `GET` | `/api/patients/:id` | detalhe | 200 | 400, 401, 404 |
 | `PATCH` | `/api/patients/:id` | RF-02 | 200 | 400, 401, 404, 422 |
-| `DELETE` | `/api/patients/:id` | **RF-08 anonimizar** | 204 | 401, 404 |
+| `DELETE` | `/api/patients/:id` | **RF-08 anonimizar** | 204 | 400, 401, 404 |
 | `GET` | `/api/patients/:id/appointments` | RF-06 linha do tempo · `?page=&perPage=` | 200 | 400, 401, 404 |
 | `POST` | `/api/appointments` | RF-03 | 201 | 400, 401, 404, 409, 422 |
 | `GET` | `/api/appointments` | RF-04 · `?from=&to=&patientId=&status=` | 200 | 400, 401 |
-| `GET` | `/api/appointments/:id` | detalhe | 200 | 401, 404 |
+| `GET` | `/api/appointments/:id` | detalhe | 200 | 400, 401, 404 |
 | `PATCH` | `/api/appointments/:id` | RF-04 reagendar / concluir | 200 | 400, 401, 404, 409, 422 |
-| `DELETE` | `/api/appointments/:id` | RF-04 cancelar (C3) | 204 | 401, 404, 422 |
+| `DELETE` | `/api/appointments/:id` | RF-04 cancelar (C3) | 204 | 400, 401, 404, 422 |
 | `POST` | `/api/appointments/:id/notes` | RF-05 | 201 | 400, 401, 404, 422 |
 
 > **17 rotas, uma por requisito.** Não há `GET /appointments/:id/notes`: o detalhe
@@ -620,12 +645,28 @@ Tudo autenticado, exceto o que tem `@Public()`.
 > avaliador percorrer sem nada novo para ver.
 
 > **Duas linhas corrigidas contra o código na fricção final da sprint 04** (10/08/2026,
-> [sprint-04.02](desenvolvimento/sprints/sprint-04.02-anotacoes.md) §issues 9 e 10):
+> [sprint-04.02](desenvolvimento/sprints/sprint-04.02-anotacoes.md) §issues 11):
 > a linha do tempo é **paginada** desde a sprint 04.02 (decisão 3 revertida) e valida
 > `page`/`perPage` como toda listagem, então declara `?page=&perPage=` e `400` como as
 > outras duas; e `DELETE /appointments/:id` responde **422** ao cancelar consulta já
 > concluída — guarda da máquina de estados (F4 §3), não invariante. Cancelar o já
 > cancelado continua 204 (§12.3).
+
+> **`400` nas quatro rotas que só têm `:id`** — acrescentado na fricção PRÉ da
+> [sprint-05.01](desenvolvimento/sprints/sprint-05.01-swagger-e-seed.md) (achado ALTO
+> do `[Produto]`). `GET /api/patients/nao-e-uuid` responde `400 VALIDATION_ERROR`,
+> não 404 — verificado ao vivo em 10/08/2026. A tabela declarava 400 apenas onde há
+> `@Body()` ou `@Query()`. **Quinze rotas devolvem 400, não onze.**
+>
+> **Corrigido na implementação da mesma sprint** (§issues 2): quem devolve esse 400
+> **não é** o `ZodValidationPipe` global, como a fricção PRÉ concluiu — é o
+> **`ParseUUIDPipe`** declarado rota a rota. O pipe do `nestjs-zod` devolve o valor
+> intocado quando o metatype não é um `ZodDto`
+> (`nestjs-zod/dist/index.js:944-947`), e o metatype de `@Param('id')` é `String`.
+> A diferença é operacional: rota de caminho **sem** `ParseUUIDPipe` não ganha 400
+> nenhum — o texto solto chega ao Postgres e volta como 500 do driver. As duas formas
+> do envelope seguem valendo: **com** `details[]` quando o Zod recusa um corpo ou uma
+> query, **sem** quando o `:id` é malformado.
 
 ### 9.2 Payloads
 
@@ -683,7 +724,7 @@ Formato único, produzido pelo `AllExceptionsFilter`:
 
 | `code` | Status | Quando |
 | --- | --- | --- |
-| `VALIDATION_ERROR` | 400 | Zod rejeitou (formato, tipo, campo desconhecido) |
+| `VALIDATION_ERROR` | 400 | Zod rejeitou (formato, tipo, campo desconhecido) — **inclusive o `:id` de caminho fora do formato UUID**, e nesse caso **sem `details`** |
 | `INVALID_CREDENTIALS` | 401 | email ou senha incorretos |
 | `UNAUTHENTICATED` | 401 | sem token, token inválido ou expirado |
 | `INVALID_REFRESH_TOKEN` | 401 | refresh inexistente, expirado ou revogado |
@@ -1091,7 +1132,7 @@ nenhum teste unitário mocka TypeORM — se precisar, há vazamento.
 | cancelar libera o horário; reagendar para lá → 201 | INV-01 | int. |
 | reagendar para horário ocupado → 409 | RF-04 / INV-01 | int. |
 | reagendar ou concluir consulta cancelada → 422 | F4 §3 | unit |
-| **duas requisições concorrentes no mesmo slot → exatamente um 201 e um 409** | ADR-09 | int. — **sprint de rigor** (06.01), não F4 |
+| **duas requisições concorrentes no mesmo slot → exatamente um 201 e um 409** | ADR-09 | int. — **sprint 06.01**, não F4 ([regra: §3.2](#3)) |
 | anonimizar: PII nula + `anonymized_at` preenchido | RF-08 | unit + int |
 | anonimizar **preserva** contagem de consultas e anotações | INV-03 | int. |
 | anonimizado: novo agendamento → 422; **reagendamento → 422**; edição → 422 | INV-02 | unit |
@@ -1111,7 +1152,7 @@ nenhum teste unitário mocka TypeORM — se precisar, há vazamento.
 
 > **Três linhas corrigidas contra o código na fricção final da sprint 04**
 > (10/08/2026, [sprint-04.02](desenvolvimento/sprints/sprint-04.02-anotacoes.md)
-> §issues 11 e 12). INV-02 são **três** operações, não duas: o reagendamento ganhou
+> §issues 12 e 13). INV-02 são **três** operações, não duas: o reagendamento ganhou
 > enforcement na sprint 04.02 (issue 3 de lá) e esta matriz continuava pedindo duas —
 > uma tabela que pede menos do que o código faz deixa de ser gate. E o RF-06 não tinha
 > **nenhuma** linha obrigatória, embora `§13 F5` item 6 peça "timeline ordenada": as
@@ -1225,13 +1266,12 @@ Ordem por dependência real. Cada fase termina verde
 
 **Pronto quando:** agendar duas vezes no mesmo horário (em sequência) devolve 201 e depois **409** — a regra funcionando e demonstrável no `/api/docs`.
 
-> **Corte declarado (decisão do usuário, 09/08/2026).** A **regra** de INV-01 entra
-> aqui: índice único parcial na migration mais a verificação no caso de uso. O
-> **teste de duas requisições simultâneas** (ADR-09, pool com ≥2 conexões, asserção
-> sobre o conjunto) sai para a sprint de rigor, com idempotência e carga — é o teste
-> mais frágil da suíte, e o que ele prova a mais é o comportamento sob corrida, não
-> a existência da regra. O índice único já está lá desde F4: a corrida perde para o
-> banco mesmo sem o teste que a exercita.
+> **Corte declarado (decisão do usuário, 09/08/2026 — hoje é a regra de [§3.2](#3)).**
+> A **regra** de INV-01 entra aqui: índice único parcial na migration mais a
+> verificação no caso de uso. O **teste de duas requisições simultâneas** (ADR-09)
+> sai para a **sprint 06.01**, com idempotência e carga. O índice único já está lá
+> desde F4: a corrida perde para o banco mesmo sem o teste que a exercita.
+> O porquê e o preço estão em **§3.2** — esta nota não os repete.
 **Commits:** `feat: entidade de agendamento com indice unico parcial` · `feat: agendamento com validacao de conflito` · `feat: listagem com filtros de periodo e paciente` · `feat: reagendamento e cancelamento` · `test: integracao da regra de conflito de agenda`
 
 ---
@@ -1281,7 +1321,7 @@ Ordem por dependência real. Cada fase termina verde
    sessão**. Ambos saem de decorator composto, não de bloco copiado
    ([sprint-05.01](desenvolvimento/sprints/sprint-05.01-swagger-e-seed.md) decisões 1 a 3).
    O 401 de `login` e de `refresh` fica onde está — é outro erro com o mesmo status.
-3. Seed espelhando os wireframes: médico demo, pacientes Pedro/Eduardo/Bruno, consultas em 01/01, 10/02 e 15/05 com anotações, **idempotente** e com ano fixo.
+3. Seed espelhando os wireframes: médico demo, pacientes Pedro/Eduardo/Bruno, consultas em 01/01, 10/02 e 15/05 — **anotação só nas duas concluídas** (01/01 e 10/02; a de 15/05 é a próxima, sem anotação) —, **idempotente** e com ano fixo.
 4. `openapi.e2e-spec.ts` cobra `summary` e ao menos uma resposta com `example` em **toda** operação do documento da aplicação, mais a contagem de operações. A sonda de `test/factories/` fica fora do documento do gate — fixture dentro do gate obriga a abrir exceção, e gate com exceção não é gate.
 
 **Pronto quando:** dá para logar, clicar em **Authorize**, colar o token e executar **todos** os endpoints direto do `/api/docs`.
@@ -1371,12 +1411,12 @@ README é para **humano** — e o humano é o avaliador com pouco tempo. Na orde
 quem acabou de clonar:
 
 1. **O que é** — três linhas.
-2. **Subir em 3 comandos** — `docker compose up -d`, `npm run migration:run`, `npm run seed`, com o que esperar de cada um.
-3. **Credenciais do seed** — email e senha do médico demo, em destaque.
-4. **Roteiro de avaliação em 6 passos** — abrir `/api/docs` → `POST /api/auth/login` → copiar `accessToken` → **Authorize** → criar paciente → agendar → **agendar de novo no mesmo horário e ver o 409** → anotar → ver a linha do tempo.
+2. **Do clone à validação** — os três comandos que sobem a aplicação (`docker compose up -d`, `npm run migration:run`, `npm run seed`) dentro da tabela que vai do `git clone` aos gates, com o que esperar de cada passo. *(Reescrito na 05.02, decisão 11: eram "3 comandos", e a tabela tem 8 passos — os cinco restantes são o entorno, incluindo o `cp api/.env.example api/.env` sem o qual nada sobe.)*
+3. **Credenciais do seed** — email e senha do médico demo, em destaque, em **um lugar só** do texto.
+4. **Roteiro de avaliação em 10 passos, em 5 atos** — entrar (login → Authorize → `me`) · paciente (criar → listar) · agenda (agendar → **409 no mesmo horário** → **cancelar e reagendar no mesmo horário**) · consulta (anotar → linha do tempo) · **LGPD (anonimizar e ver o histórico intacto)**. *(Reescrito na 05.02, decisão 3: os 6 passos originais deixavam RF-08 e o slot que volta fora do único texto lido em ordem.)*
 5. **Requisitos atendidos** — tabela RF/RNF × onde está, e o que ficou de fora com o porquê.
 6. **Como rodar os testes** — unit, e2e, e o que cada suíte prova.
-7. **Arquitetura em um diagrama e cinco linhas** — camadas, agregados, DI do Nest; link para `docs/PLAN.md`.
+7. **Arquitetura em cinco linhas + ponteiro** — camadas, regra de dependência, agregados, DI do Nest, entity do ORM; o documento de arquitetura é `api/README.md` e o README raiz **não o repete**. *(Reescrito na 05.02, decisão 4: pedia "um diagrama e cinco linhas", e um segundo diagrama de camadas no raiz é drift garantido em duas cópias — o único diagrama do raiz é o ER do item 8.)*
 8. **Modelagem** — ER em Mermaid.
 9. **Decisões e limites** — ADRs resumidos e os débitos, para deixar claro o que foi escolha.
 
@@ -1412,9 +1452,10 @@ O que o README **não** faz: repetir este plano, explicar DDD, ou pedir desculpa
 
 ### 16.3 Débitos técnicos
 
-> **Autoridade: [DEBITOS-TECNICOS.md §abertos](DEBITOS-TECNICOS.md).** 11 débitos
-> abertos (DEBT-01 … DEBT-11), cada um com severidade, razão e **gatilho de
-> reabertura**. Nada é registrado aqui — débito duplicado é drift garantido.
+> **Autoridade: [DEBITOS-TECNICOS.md §abertos](DEBITOS-TECNICOS.md).** 14 débitos
+> abertos (DEBT-01 a DEBT-13 e DEBT-15 — o DEBT-14 está em §resolvidos), cada um com
+> severidade, razão e **gatilho de reabertura**. Nada é registrado aqui — débito
+> duplicado é drift garantido.
 
 Os dois ALTOS: **DEBT-01** (apagar o paciente não apaga o que o médico escreveu
 sobre ele) e **DEBT-07** (nada impede tentar milhares de senhas no login).

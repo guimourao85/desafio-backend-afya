@@ -157,6 +157,14 @@ Em NestJS a fronteira é o **módulo**: o que não está em `exports` não é in
 As 7 leis do sistema. Nunca violar. Cada uma tem enforcement declarado e um teste
 nomeado ([PLAN.md §12.4](PLAN.md)).
 
+> **O que "testado" quer dizer aqui.** Teste nomeado prova que a regra **existe** e
+> que ela rejeita o caso que deve rejeitar. Ele **não** prova comportamento sob
+> corrida, volume ou retry — essa classe de prova é da sprint 06.01, por regra de
+> escopo declarada em [PLAN.md §3.2](PLAN.md). Vale para todas as sete, e pesa
+> especialmente na **INV-01**: o índice único parcial é a única defesa real contra
+> duas requisições simultâneas, e ele está no banco desde F4 — **exercitado por
+> teste concorrente, ainda não**.
+
 | ID         | Invariante                                                                                     | Enforcement                                                                   | HTTP    |
 | ---------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------- |
 | **INV-01** | Um médico não tem dois agendamentos **não cancelados** no mesmo instante                       | caso de uso consulta **+** índice único parcial `uk_appointments_doctor_slot` | 409     |
@@ -188,13 +196,14 @@ quando não pode.
 | Agendar paciente anonimizado                 | 422 `BUSINESS_RULE_VIOLATION` | "Paciente anonimizado (LGPD) não pode receber novos agendamentos." |
 | **Editar** paciente anonimizado              | 422 `BUSINESS_RULE_VIOLATION` | "Paciente anonimizado (LGPD) não pode ser editado."                |
 | **Reagendar** consulta de paciente anonimizado | 422 `BUSINESS_RULE_VIOLATION` | "Paciente anonimizado (LGPD) não pode ter consultas reagendadas."  |
-| Campo desconhecido no corpo                  | 400 `VALIDATION_ERROR`        | "Campo desconhecido no corpo da requisição."                       |
+| Campo desconhecido no corpo                  | 400 `VALIDATION_ERROR`        | "Requisição inválida." + `details: [{ path: "", message: "Campo desconhecido no corpo da requisição." }]` |
 | Anotar em consulta cancelada                 | 422 `BUSINESS_RULE_VIOLATION` | "Consulta cancelada não aceita anotações."                         |
 | Reagendar consulta cancelada ou concluída    | 422 `BUSINESS_RULE_VIOLATION` | "Consulta cancelada ou concluída não pode ser reagendada."          |
 | Concluir consulta não agendada               | 422 `BUSINESS_RULE_VIOLATION` | "Só uma consulta agendada pode ser concluída."                      |
 | Cancelar consulta já concluída               | 422 `BUSINESS_RULE_VIOLATION` | "Consulta já concluída não pode ser cancelada."                     |
 | Recurso de outro médico, ou inexistente      | 404 `RESOURCE_NOT_FOUND`      | "Paciente não encontrado." / "Agendamento não encontrado."         |
-| Campo com formato inválido ou desconhecido   | 400 `VALIDATION_ERROR`        | "Dados inválidos." + `details[]` por campo                         |
+| Campo com formato inválido, no corpo ou na query | 400 `VALIDATION_ERROR`    | "Requisição inválida." + `details[]` por campo                     |
+| **`:id` de caminho fora do formato UUID**    | 400 `VALIDATION_ERROR`        | "Requisição inválida." — **sem `details`**: o pipe global valida `@Param` também, e aí não há campo de formulário a apontar |
 | Refresh inexistente, expirado ou já revogado | 401 `INVALID_REFRESH_TOKEN`   | "Sessão expirada. Faça login novamente."                           |
 | Excluir paciente já anonimizado              | 204                           | — (idempotente: não é erro)                                        |
 | Cancelar agendamento já cancelado            | 204                           | — (idempotente)                                                    |
@@ -296,18 +305,28 @@ sub-doc de sprint. Esta tabela é a única amarração canônica sprint ↔ fase
 | 03.01  | F3          | `patients`: cadastro, listagem, edição, anonimização LGPD                                           | [sprint-03.01](desenvolvimento/sprints/sprint-03.01-pacientes.md)          | ✅     |
 | 04.01  | F4          | `appointments`: agenda com recusa de conflito, reagendamento, cancelamento                          | [sprint-04.01](desenvolvimento/sprints/sprint-04.01-agenda.md)                                                                          | ✅     |
 | 04.02  | F5          | `appointments`: anotações e linha do tempo do paciente                                              | [sprint-04.02](desenvolvimento/sprints/sprint-04.02-anotacoes.md)          | ✅     |
-| 05.01  | F6          | Swagger: 400 e 401 por decorator, seed de demonstração idempotente e gate do documento OpenAPI      | [sprint-05.01](desenvolvimento/sprints/sprint-05.01-swagger-e-seed.md)     | ⬜     |
-| 05.02  | F7          | README para o avaliador e ER — **sem CI** (RNF-12 cortado, `PLAN.md §3.1`)                          | [sprint-05.02](desenvolvimento/sprints/sprint-05.02-readme-e-er.md)        | ⬜     |
-| 06.01  | —           | **Rigor:** teste de concorrência no slot (ADR-09), idempotência (DEBT-05) e carga                   | —                                                                          | ⬜     |
+| 05.01  | F6          | Swagger: 400 e 401 por decorator, exemplos de corpo executáveis, seed de demonstração idempotente e gate do documento OpenAPI | [sprint-05.01](desenvolvimento/sprints/sprint-05.01-swagger-e-seed.md)     | ✅     |
+| 05.02  | F7          | README para o avaliador e ER — **sem CI** (RNF-12 cortado, `PLAN.md §3.1`)                          | [sprint-05.02](desenvolvimento/sprints/sprint-05.02-readme-e-er.md)        | ✅     |
+| 06.01  | —           | **Provas sob estresse:** concorrência no slot (ADR-09), idempotência (DEBT-05) e carga             | [sprint-06.01](desenvolvimento/sprints/sprint-06.01-concorrencia-idempotencia-e-carga.md) | ⬜     |
 
 **Legenda:** ⬜ não iniciada · 🟨 em andamento · ✅ verde (`lint` + `build` + `test`).
 
+> **Como a 05.02 fechou.** O teste dela não é suíte: é uma pessoa seguindo o README.
+> Ele foi executado em 10/08/2026 num diretório novo, com container e volume criados do
+> zero — 14 passos do README e os 10 do roteiro, todos verdes. Como `git commit` é do
+> usuário, o conteúdo veio de um snapshot fiel do que o commit conterá, não de um
+> `git clone` de `origin/main` (que ainda está na 04.02). O método e o que segue sem
+> prova estão em
+> [sprint-05.02 §passo-9](desenvolvimento/sprints/sprint-05.02-readme-e-er.md).
+
 **Uma sprint não tem fase**, e está declarada:
 
-- **06.01** — a transversal de rigor. Decisão do usuário em 09/08/2026, para
-  concentrar o que endurece o que já existe em vez de espalhar teste frágil por
-  sprint de feature. A **regra** de INV-01 continua em F4; o que se concentra ali é a
-  **prova sob corrida**, mais idempotência e carga.
+- **06.01** — a transversal das provas sob estresse. Não tem fase porque não entrega
+  feature: entrega a **prova** de que features já entregues sobrevivem a
+  concorrência, volume e retry. Decisão do usuário em 09/08/2026 para o teste
+  concorrente do slot, estendida a toda a classe de prova em 10/08/2026.
+  **A regra que a governa é [PLAN.md §3.2](PLAN.md)** — sprint de feature entrega a
+  regra, a 06.01 entrega a prova. Esta linha não a repete: aponta.
 
 **Numeração:** `NN.MM` — `NN` é a sprint (agrupamento entregável), `MM` é o sub-doc
 dentro dela. Nenhuma fase de `PLAN.md §13` existe fora desta tabela; nenhum sub-doc
