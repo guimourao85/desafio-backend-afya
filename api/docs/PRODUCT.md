@@ -311,12 +311,11 @@ sub-doc de sprint. Esta tabela é a única amarração canônica sprint ↔ fase
 
 **Legenda:** ⬜ não iniciada · 🟨 em andamento · ✅ verde (`lint` + `build` + `test`).
 
-> **Como a 05.02 fechou.** O teste dela não é suíte: é uma pessoa seguindo o README.
-> Ele foi executado em 10/08/2026 num diretório novo, com container e volume criados do
-> zero — 14 passos do README e os 10 do roteiro, todos verdes. Como `git commit` é do
-> usuário, o conteúdo veio de um snapshot fiel do que o commit conterá, não de um
-> `git clone` de `origin/main` (que ainda está na 04.02). O método e o que segue sem
-> prova estão em
+> **Como a 05.02 fechou.** O teste dela não é suíte: é uma pessoa seguindo o README. Ele
+> rodou duas vezes em 10/08/2026 — antes do push, sobre um snapshot fiel do futuro
+> commit, e depois dele a partir de um **`git clone` real** de `origin/main`, com
+> diretório, container e volume criados do zero. Nas duas, os 14 passos do README e os
+> 10 do roteiro saíram verdes. Registro em
 > [sprint-05.02 §passo-9](desenvolvimento/sprints/sprint-05.02-readme-e-er.md).
 
 **Uma sprint não tem fase**, e está declarada:

@@ -17,10 +17,10 @@
 
 **Branch:** `main` · **Criado em:** 2026-08-10 · **Fase:** F7
 **Status:** ✅ **fechada em 10/08/2026** — os 10 passos do §escopo entregues, fricção PÓS
-feita (um ALTO do `[Produto]` corrigido) e o **passo 9 executado de ponta a ponta** num
-ambiente do zero (§passo-9). A fricção PRÉ havia corrigido três ALTO e quatro MÉDIO no
-doc antes da primeira linha de prosa (§scores). **Resta fora de prova apenas o que
-depende do push:** o `git clone` de `origin/main` e o render do Mermaid no GitHub.
+feita (um ALTO do `[Produto]` corrigido) e o **passo 9 executado duas vezes**: sobre
+snapshot do futuro commit, antes do push, e de novo **a partir de um `git clone` real
+de `origin/main`** depois dele (§passo-9). A fricção PRÉ havia corrigido três ALTO e
+quatro MÉDIO no doc antes da primeira linha de prosa (§scores).
 **Agentes acionados:** `[Seguranca]` `[Produto]` `[QA]`
 
 > **Dependência 1 — a 05.01:** ✅ **fechada em 10/08/2026.** O roteiro roda sobre a
@@ -252,7 +252,7 @@ altera.
 - [x] Credenciais do seed em destaque, com a nota de dev-only — e em **um lugar só** no texto (decisão 9)
 - [x] Roteiro nos **10 passos / 5 atos** do §nomes: o 409 (passo 6), o slot que volta (passo 7) e a LGPD com histórico intacto (passo 10)
 - [x] Zero repetição de `PLAN.md`, de `api/README.md` ou de DDD explicado (regra de fonte única)
-- [~] ER em Mermaid bate com as **migrations aplicadas** (lido delas, não das entities) e a **sintaxe** passa no parser do Mermaid v11; **o render no GitHub depende do push** (edge case 7)
+- [x] ER em Mermaid bate com as **migrations aplicadas** (lido delas, não das entities) e **renderiza**: SVG gerado com `mermaid@11` a partir do README do clone real, com as 5 tabelas e os 5 relacionamentos; no GitHub o bloco é reconhecido como diagrama (edge case 7)
 - [x] RNF-12 aparece na tabela como **fora de escopo**, não como pendência nem como débito
 - [x] Nenhum bloco de estado narrado; nenhum número repetido em dois lugares (decisões 1 e 2) — três repetições encontradas e removidas na PÓS
 - [x] ADRs e débitos conferidos contra `PRODUCT.md §adrs` e `DEBITOS-TECNICOS.md §abertos`, não contra `PLAN.md §16.3`
@@ -352,9 +352,26 @@ Ambiente do zero: `docker compose down` no projeto de trabalho, volume novo
 **Duas correções nasceram daqui:** o índice defasado (§issues 6) e a consulta cancelada
 aparecendo na linha do tempo (§issues 7).
 
-**O que continua sem prova, e é honesto dizer:** o `git clone` de `origin/main` e o
-**render do Mermaid no GitHub**. Os dois dependem do mesmo push. Depois dele, refazer
-esta validação custa dois minutos — subir e rodar o roteiro.
+### A segunda rodada — `git clone` de verdade
+
+Depois do push (`759880b`), a validação foi **refeita do começo**, agora sem nenhuma
+simulação: `projects/tmp` esvaziado, volume `desafio-backend-afya_pgdata` removido, e
+`git clone https://github.com/guimourao85/desafio-backend-afya.git` — o comando exato do
+passo 1 do README, copiado dele.
+
+| Etapa | Resultado no clone real |
+| --- | --- |
+| O que veio | **178 arquivos**, sem `.env`, sem `node_modules`, README com as 11 seções |
+| Passos 3 a 8 | `.env` copiado · compose de pé · `{"status":"ok"}` na 2ª tentativa · volume novo com **`prontomed` e `prontomed_test`** criados pelo `init-test-db.sh` (pegadinha 4) · **4 migrations** · seed com médico, 3 pacientes e 3 consultas · `/api/docs` 200 com **17 rotas** |
+| Roteiro, 10 passos | todos verdes: 200 · 200 · 201 · `total: 4` · 201 · **409 `SCHEDULE_CONFLICT`** · 204 + **201 no mesmo horário** · 201 · timeline com a anotação · 204 e `Paciente anonimizado` com `phone`/`email`/`birthDate` nulos e **as 2 consultas e a anotação de pé** |
+| Edge case 3 | `credencial reconfirmada, nada mais inserido` |
+| Passos 9 a 14 | lint · typecheck · build ✅ · **133/21** · 4 migrations no banco de teste · **153/10** |
+| Pegadinha 9 | banco de dev intacto depois da suíte: 4 pacientes, 5 consultas |
+| ER em Mermaid | **renderizado de fato** com `mermaid@11` sobre o README do clone: SVG de 108 KB, as 5 tabelas, os 5 relacionamentos rotulados, as colunas — sem `Syntax error`. Na página do repositório, o bloco vem marcado como `data-type="mermaid"` e sem `Unable to render` |
+
+**O último item, o que dependia de olho humano:** a aparência do diagrama na página
+renderizada do GitHub — **conferida pelo usuário em 10/08/2026, aprovada**. Nada da
+sprint segue sem verificação.
 
 <!-- /§passo-9 -->
 
