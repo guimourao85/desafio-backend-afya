@@ -13,8 +13,8 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * Forward-only: uma vez aplicada, este arquivo não se edita. Correção vem em
  * migration nova.
  */
-export class Authentication1786106607670 implements MigrationInterface {
-  name = 'Authentication1786106607670';
+export class Sprint0201Authentication1786106607670 implements MigrationInterface {
+  name = 'sprint0201Authentication1786106607670';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // `doctors` primeiro — a FK abaixo referencia esta tabela.

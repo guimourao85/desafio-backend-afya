@@ -28,7 +28,7 @@
 | Peça | Arquivo | Estado |
 | --- | --- | --- |
 | Entities | `model-entities/{doctor,refresh-token}.entity.ts` | prontas; `RefreshToken` tem `revokedAt: Date \| null` |
-| Migration | `migrations/1786106607670-authentication.ts` | aplicada, forward-only — **esta sprint não gera migration** |
+| Migration | `migrations/1786106607670-sprint02.01-authentication.ts` | aplicada, forward-only — **esta sprint não gera migration** |
 | Porta de senha | `shared/interfaces/cryptography/password-hasher.ts` | completa |
 | Porta de token | `shared/interfaces/cryptography/token-issuer.ts` | **só emite** — não verifica (decisão 1) |
 | Porta de médico | `domains/domain/repositories/doctor.repository.ts` | só `findByEmail` |

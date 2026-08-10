@@ -20,8 +20,8 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  *
  * Forward-only: uma vez aplicada, este arquivo não se edita.
  */
-export class Appointments1786310600161 implements MigrationInterface {
-  name = 'Appointments1786310600161';
+export class Sprint0401Appointments1786310600161 implements MigrationInterface {
+  name = 'sprint0401Appointments1786310600161';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(

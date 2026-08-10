@@ -168,7 +168,7 @@ Todo caminho parte de `api/` (PLAN §10), exceto onde marcado `RAIZ`.
 
 | Arquivo | Escopo | Gerada por | Revisado |
 | --- | --- | --- | --- |
-| `<timestamp>-<escopo>.ts` | o que faz | `npm run migration:generate --name=<escopo>` | ⬜ SQL lido linha a linha |
+| `<timestamp>-sprint<NN.MM>-<escopo>.ts` | o que faz | `npm run migration:generate --name=sprint<NNMM>-<escopo>` **sem ponto**, depois `git mv` inserindo o ponto no arquivo | ⬜ SQL lido linha a linha · ⬜ arquivo com o ponto, classe `Sprint<NNMM><Escopo><timestamp>` sem |
 
 > Migration é **gerada**, revisada por humano e **forward-only** (ADR-08).
 > Aplicada nunca é editada — correção é migration nova.

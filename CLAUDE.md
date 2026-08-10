@@ -53,7 +53,7 @@ docker restart api-prontomed
 
 npm run start:dev · build · typecheck · lint
 npm test · test:e2e
-npm run migration:generate --name=<escopo> · migration:run · migration:revert · seed
+npm run migration:generate --name=sprint<NNMM>-<escopo> · migration:run · migration:revert · seed
 ```
 
 > **NUNCA** `npx typeorm` direto — sempre pelos scripts (`typeorm-ts-node-commonjs`).

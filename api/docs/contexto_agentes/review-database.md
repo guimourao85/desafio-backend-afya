@@ -112,10 +112,16 @@ O gerador economiza digitação; **ele não decide o schema**.
 1. **A entity declara tudo** antes de gerar: nome de tabela, `primaryKeyConstraintName`, `@Index` nomeado (com `where` quando parcial), `@Check` nomeado, `foreignKeyConstraintName`, `transformer` em coluna `numeric`. Sem isso o gerador inventa `UQ_a1b2c3…` — achado **ALTO**.
 2. **Revisão obrigatória do SQL gerado** contra o DDL de `PRODUCT.md §banco` / `PLAN.md §6.2`: nomes de constraint, tipo de coluna, nulidade, `WHERE` do índice parcial, `down()` coerente. Migration gerada e comitada sem revisão é achado **ALTO**.
 3. **Forward-only.** Migration já aplicada **nunca** é editada — a correção é uma migration nova. Editar aplicada faz o ledger (`typeorm_migrations`) e o schema real divergirem em silêncio.
+   > **Exceção única, exercida em 10/08/2026:** as quatro migrations foram renomeadas para o padrão da regra 7 — arquivo e classe, **DDL intocado**. O perigo é que a chave do ledger é a **classe**, não o timestamp: renomeada, o TypeORM lê as quatro como pendentes e tenta recriar as tabelas, quebrando no `CREATE TABLE`. A renomeação só se completa com o ledger reescrito **em todo ambiente que já rodou a migration** — aqui, `prontomed` e `prontomed_test`:
+   > ```sql
+   > UPDATE typeorm_migrations SET name = 'sprint0201Authentication1786106607670' WHERE timestamp = 1786106607670;
+   > ```
+   > Passou por serem dois bancos locais, sob controle, sem ambiente compartilhado. **Fora disso, renomear migration aplicada é proibido** — em ambiente onde não se alcança todo ledger, o nome fica como está.
 4. **`down()` real**, nunca vazio, desfazendo exatamente o que `up()` fez.
 5. **`synchronize: false`** em qualquer ambiente e **`migrationsRun: false`** — migration roda por comando, nunca no boot. Qualquer um dos dois ligado é **CRÍTICO**.
 6. **Uma linha do tempo global** em `infrastructure/databases/typeorm/postgres/migrations` — nunca por módulo.
-7. Uma migration por fase, com escopo no nome (`<timestamp>-authentication.ts`).
+7. Uma migration por fase, com **sprint e escopo no nome**: arquivo `<timestamp>-sprint<NN.MM>-<escopo-kebab>.ts`, classe `Sprint<NNMM><Escopo><timestamp>` e `name` igual à classe com a inicial minúscula — ex. `1786106607670-sprint02.01-authentication.ts` → `Sprint0201Authentication1786106607670` / `'sprint0201Authentication1786106607670'`. O `NN.MM` é o da sprint que gerou a migration, o mesmo do sub-doc em `desenvolvimento/sprints/`. Nome sem sprint é achado **MÉDIO** — o arquivo perde a amarração com o registro de execução que explica *por que* aquele DDL é aquele.
+   > **O ponto vai no arquivo, nunca na classe.** O CLI monta a classe a partir do `--name` sem sanitizar: `--name=sprint09.01-probe` emite `export class Sprint09.01Probe…`, que não compila (verificado em 10/08/2026 com `migration:create`). Gere com `--name=sprint<NNMM>-<escopo>` — a classe sai correta sozinha — e insira o ponto no arquivo com `git mv`.
 8. A entity é a fonte do DDL (ADR-03); o SQL gerado é o registro. Divergência entre o que a entity declara e o que a migration aplica é achado **CRÍTICO**.
 <!-- /§regras -->
 
