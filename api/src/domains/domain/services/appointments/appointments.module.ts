@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
 
 import { PatientsModule } from '../patients/patients.module';
+import { AddConsultationNoteService } from './add-consultation-note.service';
 import { appointmentsProviders } from './appointments.provider';
 import { CancelAppointmentService } from './cancel-appointment.service';
 import { GetAppointmentService } from './get-appointment.service';
+import { GetPatientTimelineService } from './get-patient-timeline.service';
 import { ListAppointmentsService } from './list-appointments.service';
 import { ScheduleAppointmentService } from './schedule-appointment.service';
 import { UpdateAppointmentService } from './update-appointment.service';
@@ -26,6 +28,8 @@ import { UpdateAppointmentService } from './update-appointment.service';
     GetAppointmentService,
     UpdateAppointmentService,
     CancelAppointmentService,
+    AddConsultationNoteService,
+    GetPatientTimelineService,
   ],
   exports: [
     ScheduleAppointmentService,
@@ -33,6 +37,11 @@ import { UpdateAppointmentService } from './update-appointment.service';
     GetAppointmentService,
     UpdateAppointmentService,
     CancelAppointmentService,
+    AddConsultationNoteService,
+    // Exportado por este módulo, e não pelo `PatientsModule`, mesmo servindo a uma
+    // URL de paciente: o dado é do agregado `Appointment`. A rota segue o cliente,
+    // o código segue o agregado (sprint 04.02, decisão 13).
+    GetPatientTimelineService,
   ],
 })
 export class AppointmentsModule {}

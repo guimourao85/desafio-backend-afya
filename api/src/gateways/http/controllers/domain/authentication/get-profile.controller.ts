@@ -5,6 +5,19 @@ import { GetProfileService } from '@/domains/domain/services/authentication/get-
 import { CurrentDoctor } from '@/framework/authentication/current-doctor.decorator';
 import { DoctorHttpResponse, DoctorPresenter } from '@/presentation/presenters/doctor.presenter';
 
+/**
+ * `GET /api/auth/me` — quem sou eu.
+ *
+ * A rota que o front chama depois do login para saber o nome de quem entrou. Não
+ * recebe parâmetro nenhum: a identidade sai do token. É por isso que não existe um
+ * `GET /api/auth/:id` — se existisse, um médico leria o perfil de outro.
+ *
+ * Vai ao banco em vez de servir o que já está dentro do token, porque o nome não
+ * está lá — e colocá-lo criaria uma cópia que envelhece: o médico trocaria o nome
+ * e o token continuaria dizendo o antigo por 15 minutos.
+ *
+ * Mais detalhes: PRODUCT.md — INV-04, INV-07.
+ */
 @ApiTags('autenticação')
 @Controller('auth')
 export class GetProfileController {

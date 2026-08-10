@@ -23,21 +23,32 @@ export type ScheduleAppointmentResult = Either<
   Appointment
 >;
 
-/** INV-01. O texto é o de `PRODUCT.md §regras`. */
+/**
+ * O texto do 409. Fica exportado porque o reagendamento recusa pelo mesmo motivo e
+ * precisa dizer a mesma coisa — duas cópias divergiriam no dia em que alguém
+ * editasse uma. (INV-01)
+ */
 export const SCHEDULE_CONFLICT_MESSAGE = 'Já existe um agendamento neste horário.';
 
-/** INV-02, texto de `PRODUCT.md §regras`. */
+/** O texto do 422 de paciente anonimizado por pedido de LGPD. (INV-02) */
 const ANONYMIZED_PATIENT_MESSAGE =
   'Paciente anonimizado (LGPD) não pode receber novos agendamentos.';
 
 /**
- * Marca uma consulta (RF-03) — o caso de uso que carrega a regra central do sistema.
+ * Marca uma consulta — o caso de uso que carrega a regra central do sistema.
  *
- * O dado do paciente vem do **service público do `PatientsModule`**, nunca do
- * repositório dele nem de um `JOIN` (`PRODUCT.md §dominios`). O ganho não é
- * cerimônia: `FindPatientSummaryService` já filtra por médico, então "paciente de
- * outro consultório" chega aqui como 404 sem esta classe precisar saber que INV-04
- * existe.
+ * Três perguntas, nesta ordem, e qualquer "não" encerra:
+ *   1. este paciente é deste médico?  → senão, 404
+ *   2. ele foi anonimizado por LGPD?  → se sim, 422
+ *   3. o horário está livre?          → senão, 409
+ *
+ * O dado do paciente vem do **service público do módulo de pacientes**, nunca do
+ * repositório de lá nem de um `JOIN` na tabela `patients`. Isso não é cerimônia de
+ * arquitetura: aquele service já filtra por médico, então "paciente de outro
+ * consultório" chega aqui como 404 sem esta classe precisar conhecer a regra de
+ * isolamento por médico. A separação faz o trabalho sozinha.
+ *
+ * Atende RF-03. Mais detalhes: PRODUCT.md — INV-01, INV-02, INV-04 · §dominios.
  */
 @Injectable()
 export class ScheduleAppointmentService {
@@ -54,19 +65,27 @@ export class ScheduleAppointmentService {
   }: ScheduleAppointmentRequest): Promise<ScheduleAppointmentResult> {
     const patient = await this.findPatientSummary.execute({ doctorId, patientId });
 
-    // Propaga o 404 do outro módulo em vez de inventar um: a mensagem "Paciente
-    // não encontrado." é de lá, e vale igual para inexistente e para alheio.
+    // Repassa o 404 do outro módulo em vez de inventar um próprio: a mensagem
+    // "Paciente não encontrado." é de lá, e vale igual para paciente inexistente e
+    // para paciente de outro consultório.
     if (patient.isLeft()) {
       return left(patient.value);
     }
 
+    // Paciente que exerceu o direito ao esquecimento não recebe consulta nova. Não
+    // é bloqueio técnico: agendar exigiria saber quem ele é, e é exatamente isso
+    // que foi apagado a pedido dele.
     if (patient.value.isAnonymized) {
       return left(new BusinessRuleViolationError(ANONYMIZED_PATIENT_MESSAGE));
     }
 
-    // INV-01, primeira camada: dá o 409 com mensagem humana no caso comum. A
-    // segunda camada é o índice único parcial, que pega o que esta verificação
-    // não pode pegar — duas requisições simultâneas passam as duas por aqui.
+    // Primeira das duas camadas que protegem o horário. Esta aqui é a que dá o 409
+    // com mensagem legível no caso normal.
+    //
+    // A segunda camada é uma restrição do próprio banco, e ela existe porque esta
+    // verificação tem um buraco intransponível: duas requisições simultâneas podem
+    // passar as duas por aqui antes de qualquer uma gravar. O banco recusa a
+    // segunda gravação de qualquer jeito.
     const conflict = await this.appointmentRepository.findActiveBySlot(doctorId, scheduledAt);
 
     if (conflict) {

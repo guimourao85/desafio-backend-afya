@@ -86,7 +86,7 @@ registros das consultas realizadas por paciente.
 | RNF-09 | Hospedar em cloud | Desejável | — | **fora de escopo** (ADR-12) |
 | RNF-10 | Autenticação/autorização | Desejável | F2 | JWT + refresh opaco revogável, `JwtAuthGuard` global (§8) |
 | RNF-11 | Lint / qualidade | Desejável | F0 | ESLint + Prettier + `tsc --noEmit` |
-| RNF-12 | Pipeline automatizado | Desejável | F7 | GitHub Actions: lint → build → testes |
+| RNF-12 | Pipeline automatizado | Desejável | — | **fora de escopo** — cortado pelo prisma em 10/08/2026 (§3.1), sem débito |
 
 ### 1.3 Critérios de avaliação (do próprio PDF)
 
@@ -148,16 +148,26 @@ Regra prática, nesta ordem:
 2. **É o item obrigatório ou o desejável?** Obrigatório merece rigor; desejável merece a versão honesta e pequena.
 3. **Quanto custa em superfície?** Uma tabela, uma dependência, um endpoint e um conceito novo têm preço — e o preço é cobrado na leitura de quem avalia.
 
-**O que o prisma nunca corta:** o índice único parcial com o teste concorrente
-(INV-01), a anonimização que preserva histórico (RF-08), o escopo por médico em
-toda leitura (INV-04), a separação em camadas com portas e adapters, o Zod como
-fonte única de validação e Swagger, e o teste que rastreia requisito. São os itens
-que o próprio PDF diz que vai avaliar.
+**O que o prisma nunca corta:** o índice único parcial de INV-01 **com a
+verificação no caso de uso**, a anonimização que preserva histórico (RF-08), o
+escopo por médico em toda leitura (INV-04), a separação em camadas com portas e
+adapters, o Zod como fonte única de validação e Swagger, e o teste que rastreia
+requisito. São os itens que o próprio PDF diz que vai avaliar.
+
+> **A regra de INV-01 é inegociável; a prova sob corrida está adiada, não cortada.**
+> O teste de duas requisições simultâneas (ADR-09) saiu de F4 por decisão do usuário
+> em 09/08/2026 e vive na sprint 06.01 ([PRODUCT.md §roadmap](PRODUCT.md)) — a
+> última da fila. Enquanto 06.01 não fechar, o que está provado é que a regra
+> **existe** (índice no banco + rejeição no service, testados), não que ela
+> **segura a corrida**. Se 06.01 cair por tempo, é este parágrafo que registra o
+> que ficou sem prova — não um silêncio.
 
 **O que o prisma já cortou:** rotação de refresh · `@nestjs/terminus` no
 healthcheck · interceptor de logging com correlation-id · a rota redundante de
-anotações. Cada corte tem linha no ledger ou nota no lugar onde a decisão se
-aplica — corte silencioso vira buraco, corte declarado vira decisão.
+anotações · **o pipeline de CI (RNF-12, Desejável — decisão do usuário em
+10/08/2026, sem débito: um pipeline que ninguém mantém numa POC avaliada
+localmente é cerimônia)**. Cada corte tem linha no ledger ou nota no lugar onde a
+decisão se aplica — corte silencioso vira buraco, corte declarado vira decisão.
 
 ---
 
@@ -367,13 +377,26 @@ CREATE INDEX idx_appointments_patient ON appointments (patient_id, scheduled_at)
 
 CREATE TABLE consultation_notes (
   id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  -- `ON DELETE NO ACTION` (o padrão) declarado de propósito na sprint 04.02
+  -- (decisão 15): apagar fisicamente uma consulta que tem anotação DEVE falhar.
+  -- `CASCADE` daria a um `DELETE` manual o poder de sumir com registro clínico.
   appointment_id uuid        NOT NULL REFERENCES appointments(id),
   content        text        NOT NULL,
   created_at     timestamptz NOT NULL DEFAULT now(),
-  updated_at     timestamptz NOT NULL DEFAULT now()
+  updated_at     timestamptz NOT NULL DEFAULT now(),
+  -- Acrescentado na sprint 04.02 (decisão 16, achado do `[Database]`): o `.min(1)`
+  -- do Zod guarda a borda HTTP, este guarda o que entra por baixo dela — seed,
+  -- migration, correção manual. Mesmo papel de `ck_patients_birth_date`.
+  CONSTRAINT ck_consultation_notes_content_not_empty CHECK (length(btrim(content)) > 0)
 );
-CREATE INDEX idx_notes_appointment ON consultation_notes (appointment_id, created_at);
+-- Nome corrigido na sprint 04.02 (decisão 8): era `idx_notes_appointment`, que
+-- abrevia a tabela e fura o `idx_<tabela>_<colunas>` de `review-database.md §regras`.
+CREATE INDEX idx_consultation_notes_appointment ON consultation_notes (appointment_id, created_at);
 ```
+
+> **Sem coluna `doctor_id`** (sprint 04.02, decisão 9): a nota só é alcançada pela
+> raiz, e a raiz filtra `doctorId` em todo método da porta (INV-04). Uma segunda
+> cópia do dono aqui poderia divergir da raiz e apontar para outro consultório.
 
 ### 6.3 A entity manda no DDL — declare os nomes
 
@@ -583,18 +606,26 @@ Tudo autenticado, exceto o que tem `@Public()`.
 | `GET` | `/api/patients/:id` | detalhe | 200 | 401, 404 |
 | `PATCH` | `/api/patients/:id` | RF-02 | 200 | 400, 401, 404, 422 |
 | `DELETE` | `/api/patients/:id` | **RF-08 anonimizar** | 204 | 401, 404 |
-| `GET` | `/api/patients/:id/appointments` | RF-06 linha do tempo | 200 | 401, 404 |
+| `GET` | `/api/patients/:id/appointments` | RF-06 linha do tempo · `?page=&perPage=` | 200 | 400, 401, 404 |
 | `POST` | `/api/appointments` | RF-03 | 201 | 400, 401, 404, 409, 422 |
 | `GET` | `/api/appointments` | RF-04 · `?from=&to=&patientId=&status=` | 200 | 400, 401 |
 | `GET` | `/api/appointments/:id` | detalhe | 200 | 401, 404 |
 | `PATCH` | `/api/appointments/:id` | RF-04 reagendar / concluir | 200 | 400, 401, 404, 409, 422 |
-| `DELETE` | `/api/appointments/:id` | RF-04 cancelar (C3) | 204 | 401, 404 |
+| `DELETE` | `/api/appointments/:id` | RF-04 cancelar (C3) | 204 | 401, 404, 422 |
 | `POST` | `/api/appointments/:id/notes` | RF-05 | 201 | 400, 401, 404, 422 |
 
 > **17 rotas, uma por requisito.** Não há `GET /appointments/:id/notes`: o detalhe
 > do agendamento já devolve suas anotações, e a leitura que o RF-06 pede é a linha
 > do tempo do paciente. Rota que duplica leitura é superfície a mais para o
 > avaliador percorrer sem nada novo para ver.
+
+> **Duas linhas corrigidas contra o código na fricção final da sprint 04** (10/08/2026,
+> [sprint-04.02](desenvolvimento/sprints/sprint-04.02-anotacoes.md) §issues 9 e 10):
+> a linha do tempo é **paginada** desde a sprint 04.02 (decisão 3 revertida) e valida
+> `page`/`perPage` como toda listagem, então declara `?page=&perPage=` e `400` como as
+> outras duas; e `DELETE /appointments/:id` responde **422** ao cancelar consulta já
+> concluída — guarda da máquina de estados (F4 §3), não invariante. Cancelar o já
+> cancelado continua 204 (§12.3).
 
 ### 9.2 Payloads
 
@@ -621,9 +652,15 @@ Tudo autenticado, exceto o que tem `@Public()`.
 { "content": "O paciente apresentou uma vermelhidão na pele..." }
 
 // GET /api/patients/:id/appointments — alimenta "Data da consulta × Atendimento"
+// Paginada, com o mesmo envelope de §9.3 que toda listagem da API usa. O exemplo
+// anterior omitia `meta` e foi corrigido na sprint 04.02 (decisão 3, achado ALTO do
+// [Produto]): array cru numa rota e envelope em outra é o defeito que o §9.3 existe
+// para impedir. Consultas do mais recente para trás; anotações na ordem em que
+// foram escritas; consulta sem anotação vem com `"notes": []`, nunca null.
 { "data": [ { "id": "uuid", "scheduledAt": "2019-01-01T09:00:00.000Z",
               "status": "COMPLETED",
-              "notes": [ { "id": "uuid", "content": "…", "createdAt": "…" } ] } ] }
+              "notes": [ { "id": "uuid", "content": "…", "createdAt": "…" } ] } ],
+  "meta": { "page": 1, "perPage": 20, "total": 1, "totalPages": 1 } }
 ```
 
 ### 9.3 Envelope de listagem (único para toda a API)
@@ -652,7 +689,7 @@ Formato único, produzido pelo `AllExceptionsFilter`:
 | `INVALID_REFRESH_TOKEN` | 401 | refresh inexistente, expirado ou revogado |
 | `RESOURCE_NOT_FOUND` | 404 | inexistente **ou de outro médico** (INV-04) |
 | `SCHEDULE_CONFLICT` | 409 | horário ocupado (INV-01) |
-| `BUSINESS_RULE_VIOLATION` | 422 | payload válido, regra violada (INV-02, INV-05) |
+| `BUSINESS_RULE_VIOLATION` | 422 | payload válido, regra violada (INV-02, INV-05) **ou guarda da máquina de estados** (F4 §3: reagendar/concluir a partir de terminal, cancelar concluída) |
 | `INTERNAL_ERROR` | 500 | inesperado — mensagem genérica, stack só no log |
 
 > **O filtro nunca vaza nome de constraint.** `QueryFailedError` com `23505` em
@@ -935,7 +972,7 @@ export class TypeOrmAppointmentRepository implements AppointmentRepository {
 ### 11.8 Controller (`gateways/http/controllers/domain/appointments/schedule-appointment.controller.ts`)
 
 ```ts
-@ApiTags('Agendamentos')
+@ApiTags('agendamentos')
 @Controller('appointments')
 export class ScheduleAppointmentController {
   constructor(private readonly service: ScheduleAppointmentService) {}
@@ -1057,9 +1094,11 @@ nenhum teste unitário mocka TypeORM — se precisar, há vazamento.
 | **duas requisições concorrentes no mesmo slot → exatamente um 201 e um 409** | ADR-09 | int. — **sprint de rigor** (06.01), não F4 |
 | anonimizar: PII nula + `anonymized_at` preenchido | RF-08 | unit + int |
 | anonimizar **preserva** contagem de consultas e anotações | INV-03 | int. |
-| anonimizado: novo agendamento → 422; edição → 422 | INV-02 | unit |
+| anonimizado: novo agendamento → 422; **reagendamento → 422**; edição → 422 | INV-02 | unit |
 | recurso de outro médico → **404** (não 403) | INV-04 | int. |
 | anotação em consulta inexistente → 404; em cancelada → 422 | INV-05 | unit |
+| linha do tempo: mais recente primeiro, anotações na ordem de escrita, consulta sem anotação com `notes: []` | RF-06 | int. |
+| linha do tempo pagina **por consulta**, nunca por anotação | RF-06 / §9.3 | int. |
 | refresh válido → novo access token que abre rota protegida | §8.2 | int. |
 | logout revoga; refresh posterior com o mesmo token → 401 | §8.2 | int. |
 | logout duas vezes com o mesmo token → 204 nas duas | §12.3 | int. |
@@ -1069,6 +1108,15 @@ nenhum teste unitário mocka TypeORM — se precisar, há vazamento.
 
 > No teste de concorrência: pool com ≥2 conexões e asserção sobre o **conjunto**
 > (`[201, 409]` em qualquer ordem), nunca sobre a ordem.
+
+> **Três linhas corrigidas contra o código na fricção final da sprint 04**
+> (10/08/2026, [sprint-04.02](desenvolvimento/sprints/sprint-04.02-anotacoes.md)
+> §issues 11 e 12). INV-02 são **três** operações, não duas: o reagendamento ganhou
+> enforcement na sprint 04.02 (issue 3 de lá) e esta matriz continuava pedindo duas —
+> uma tabela que pede menos do que o código faz deixa de ser gate. E o RF-06 não tinha
+> **nenhuma** linha obrigatória, embora `§13 F5` item 6 peça "timeline ordenada": as
+> duas linhas novas travam o que a sprint 04.02 decidiu (ordem decrescente, anotações
+> na ordem de escrita, envelope `{data, meta}` paginado por consulta).
 
 **Sem meta percentual de cobertura.** A lista acima é o gate; percentual produz
 teste escrito para o contador.
@@ -1163,9 +1211,17 @@ Ordem por dependência real. Cada fase termina verde
 1. Entity `Appointment` com `@Index` **parcial** e `@Check` nomeados (§6.3) + migration gerada; **conferir no SQL** que o `WHERE status <> 'CANCELLED'` saiu.
 2. Porta + adapter + provider + `AppointmentsModule` (importando `PatientsModule`).
 3. **Máquina de estados na entity:** `SCHEDULED` é o único estado mutável; `COMPLETED` e `CANCELLED` são terminais. `rescheduleTo()` e `complete()` devolvem `Left(BusinessRuleViolationError)` a partir de estado terminal; `cancel()` sobre já cancelado é no-op (204, idempotente — §12.3). São três guardas na entity, não uma invariante nova.
-4. Services: `ScheduleAppointment`, `ListAppointments`, `GetAppointment`, `RescheduleAppointment`, `CancelAppointment`.
-4. Controllers + `AppointmentPresenter`; filtro traduz `23505` → 409 `SCHEDULE_CONFLICT`.
-5. Testes: todos os casos de agenda, **incluindo o concorrente**.
+4. Services: `ScheduleAppointment`, `ListAppointments`, `GetAppointment`, `UpdateAppointment`, `CancelAppointment`.
+
+   > **`UpdateAppointment`, não `RescheduleAppointment`.** O `PATCH` de §9.2 funde
+   > reagendar e concluir num contrato só; dois services obrigariam o controller a
+   > escolher pelo payload — regra de negócio migrando para o transporte — ou a
+   > escrever duas vezes na mesma raiz. Decidido na fricção PRÉ de
+   > [sprint-04.01](desenvolvimento/sprints/sprint-04.01-agenda.md) §decisoes (item 8);
+   > este plano foi corrigido depois do fato.
+
+5. Controllers + `AppointmentPresenter`; filtro traduz `23505` → 409 `SCHEDULE_CONFLICT`.
+6. Testes: todos os casos de agenda — **menos o concorrente**, que saiu para 06.01 (corte declarado abaixo).
 
 **Pronto quando:** agendar duas vezes no mesmo horário (em sequência) devolve 201 e depois **409** — a regra funcionando e demonstrável no `/api/docs`.
 
@@ -1183,10 +1239,21 @@ Ordem por dependência real. Cada fase termina verde
 ### F5 — `appointments`: anotações (RF-05, RF-06)
 
 1. Entity `ConsultationNote` (interna ao agregado) + migration; `Appointment.addNote()` (§11.3).
-2. Services: `AddConsultationNote`, `ListNotesByAppointment`, `GetPatientTimeline`.
-3. Persistência do agregado inteiro (raiz + anotações) em uma transação no adapter.
-4. Controllers: `POST/GET /api/appointments/:id/notes` e `GET /api/patients/:id/appointments` — a tabela "Data da consulta × Atendimento" e o dropdown do modal num payload só.
-5. Cuidado com N+1: a linha do tempo carrega as anotações em **uma** consulta (`relations`), não uma por consulta.
+2. Services: `AddConsultationNote` e `GetPatientTimeline` — **dois, não três**. `ListNotesByAppointment` foi cortado junto com a rota dele (item 4): sem chamador, seria código morto. O detalhe da consulta carrega as anotações por `relations`.
+3. Persistência: **`appendNotes(appointment)` grava só as anotações sem `id`**, numa
+   transação no adapter, e **não toca a raiz**.
+
+   > Esta linha dizia *"persistência do agregado inteiro (raiz + anotações) em uma
+   > transação"* — o desenho com `cascade` que a fricção PÓS da sprint 04.02 derrubou
+   > (decisões 10 → 18, achado ALTO). Ao salvar uma raiz cuja coleção `@OneToMany` está
+   > carregada, o TypeORM lê a lista como **estado completo** e desassocia o que não
+   > estiver nela; com a raiz lida sem `relations` — que é o caso de quem só quer anotar
+   > — isso apaga o vínculo das notas já gravadas (`appointment_id` nulo). O plano
+   > continuava ensinando a armadilha; corrigido no fechamento da sprint 04.
+   > **§12.2 segue valendo**: uma transação, um agregado, declarada na porta e vivendo
+   > no adapter. O que mudou é *o que* entra nela.
+4. Controllers: **`POST /api/appointments/:id/notes`** e `GET /api/patients/:id/appointments` — a tabela "Data da consulta × Atendimento" e o dropdown do modal num payload só. **Não há `GET /appointments/:id/notes`**: esta linha dizia `POST/GET` e contradizia o §9.1 e o §3.1, que já registram o corte. Corrigido na sprint 04.02 (decisões 1 e 2) — os três documentos agora dizem a mesma coisa.
+5. Cuidado com N+1: a linha do tempo carrega as anotações em **uma** consulta, não uma por consulta — via `leftJoinAndSelect` no query builder, e **não** por `relations`, porque `skip`/`take` sobre um join fazem o TypeORM montar uma subquery de ids distintos e uma coluna da filha dentro dela devolveria menos consultas do que `perPage`. Consequência: a ordenação das anotações fica em memória, no adapter. `relations` fica para o **detalhe** da consulta (`findByIdWithNotes`), que não pagina.
 6. Testes: anotação em consulta cancelada → 422; timeline ordenada.
 
 **Pronto quando:** a linha do tempo devolve as consultas do paciente com suas anotações, em uma chamada.
@@ -1202,23 +1269,38 @@ Ordem por dependência real. Cada fase termina verde
    `review-backend.md §verifica` já cobra essas anotações em toda rota nova. Com a
    infra em pé desde F1, cada fase nasce navegável e o item 2 abaixo passa a
    acompanhar cada endpoint, em vez de se acumular aqui.
-2. `@ApiTags` por módulo (`Auth`, `Pacientes`, `Agendamentos`), `@ApiOperation` e `@ApiResponse` com **exemplos**, inclusive dos erros interessantes (409, 422) — escritos junto de cada rota, revisados aqui.
-3. Seed espelhando os wireframes: médico demo, pacientes Pedro/Eduardo/Bruno, consultas em 01/01, 10/02 e 15/05 com anotações.
+2. ~~`@ApiTags` por módulo, `@ApiOperation` e `@ApiResponse` com exemplos — escritos junto de cada rota, revisados aqui.~~
+   **Entregue continuamente em F2–F5**, porque `review-product.md §verifica` cobra a
+   anotação em toda rota nova: em 10/08/2026 os 17 controllers tinham `@ApiTags`,
+   `@ApiOperation` e resposta com exemplo, incluindo 409 e 422.
+   As tags são `autenticação`, `pacientes`, `agendamentos` e `health` — **PT-BR
+   minúsculo** (ADR-13), e não `Auth`/`Pacientes`/`Agendamentos`, como este item dizia
+   até ser confrontado com o código.
+2'. O que **resta** para F6 são os dois erros que nenhuma rota individual documentou,
+   porque nenhum dos dois é específico da rota: o **400 de validação** e o **401 de
+   sessão**. Ambos saem de decorator composto, não de bloco copiado
+   ([sprint-05.01](desenvolvimento/sprints/sprint-05.01-swagger-e-seed.md) decisões 1 a 3).
+   O 401 de `login` e de `refresh` fica onde está — é outro erro com o mesmo status.
+3. Seed espelhando os wireframes: médico demo, pacientes Pedro/Eduardo/Bruno, consultas em 01/01, 10/02 e 15/05 com anotações, **idempotente** e com ano fixo.
+4. `openapi.e2e-spec.ts` cobra `summary` e ao menos uma resposta com `example` em **toda** operação do documento da aplicação, mais a contagem de operações. A sonda de `test/factories/` fica fora do documento do gate — fixture dentro do gate obriga a abrir exceção, e gate com exceção não é gate.
 
 **Pronto quando:** dá para logar, clicar em **Authorize**, colar o token e executar **todos** os endpoints direto do `/api/docs`.
 **Commits:** `feat: openapi a partir dos schemas zod` · `feat: swagger com autenticacao bearer` · `chore: seed de demonstracao`
 
 ---
 
-### F7 — Documentação e pipeline
+### F7 — Documentação
 
 1. `README.md` completo conforme §15.
 2. ER (Mermaid) e ADRs resumidos no README.
-3. GitHub Actions: lint → build → testes (service `postgres:16-alpine`).
+3. ~~GitHub Actions: lint → build → testes (service `postgres:16-alpine`).~~
+   **Cortado em 10/08/2026** — RNF-12 é Desejável e o corte está declarado em §3.1.
+   **Sem débito, por decisão do usuário.** O README marca RNF-12 como fora de escopo
+   na tabela de requisitos, para o avaliador ler como escolha e não como lacuna.
 4. Varredura: nenhum `TODO`, nenhum `console.log`, nenhum segredo comitado, `git log` legível.
 
 **Pronto quando:** clone limpo → `docker compose up -d` → `npm run migration:run && npm run seed` → `/api/docs` executa todos os fluxos.
-**Commits:** `docs: readme com instrucoes, er e decisoes` · `ci: pipeline de lint, build e testes`
+**Commits:** `docs: readme com instrucoes, er e decisoes`
 
 ---
 

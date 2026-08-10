@@ -10,6 +10,21 @@ import {
 import { AnonymizePatientService } from '@/domains/domain/services/patients/anonymize-patient.service';
 import { CurrentDoctor } from '@/framework/authentication/current-doctor.decorator';
 
+/**
+ * `DELETE /api/patients/:id` — o "excluir paciente" da tela, que na verdade
+ * anonimiza. É a rota do direito ao esquecimento (LGPD).
+ *
+ * Some o que identifica: nome, telefone, email e nascimento. Fica o que não
+ * identifica ninguém sozinho e ainda tem valor clínico — sexo, altura, peso — e
+ * **toda a agenda do paciente**, intacta. Parece contraditório apagar dado pessoal
+ * e guardar histórico, mas é o pedido certo: a lei quer que a pessoa deixe de ser
+ * identificável, não que os atendimentos deixem de ter acontecido.
+ *
+ * Idempotente: anonimizar de novo responde 204 e **não** reescreve a data de
+ * quando o direito foi exercido — isso é dado de conformidade.
+ *
+ * Mais detalhes: PRODUCT.md — INV-03.
+ */
 @ApiTags('pacientes')
 @ApiBearerAuth()
 @Controller('patients')

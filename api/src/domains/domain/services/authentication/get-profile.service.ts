@@ -12,10 +12,12 @@ export interface GetProfileRequest {
 }
 
 /**
- * O que o caso de uso deixa sair do domínio. **Não é a entity `Doctor`**: ela
- * carrega `passwordHash`, e INV-07 é cobrada no retorno do caso de uso, não só na
- * resposta HTTP. Devolver a entity faria do presenter a única defesa — e presenter
- * é justamente o lugar onde se esquece de tirar um campo.
+ * O que sai do domínio — três campos, e só. **Não é o médico inteiro**: aquele
+ * objeto carrega a senha embaralhada, e "senha nunca sai numa resposta" é cobrado
+ * já aqui, e não só na hora de montar o JSON.
+ *
+ * Devolver o objeto inteiro funcionaria hoje e deixaria a última camada como única
+ * defesa — que é justamente o lugar onde se esquece de tirar um campo novo. (INV-07)
  */
 export interface DoctorProfile {
   id: string;
@@ -25,15 +27,19 @@ export interface DoctorProfile {
 
 export type GetProfileResult = Either<UnauthenticatedError, DoctorProfile>;
 
-/** Mesmo texto do 401 do `JwtAuthGuard` — ver a nota em `refresh-session.service.ts`. */
+/** O mesmo texto do 401 do guard — ver a nota em `refresh-session.service.ts`. */
 const UNAUTHENTICATED_MESSAGE = 'Autenticação necessária.';
 
 /**
- * O perfil do médico autenticado (PLAN.md §8.2).
+ * O perfil do médico autenticado — o "quem sou eu" que o front chama depois do
+ * login.
  *
- * Vai ao banco em vez de servir o payload do token: o `name` não está lá, e
- * colocá-lo inflaria o JWT e criaria uma cópia que envelhece — o médico troca o
- * nome e o token continuaria dizendo o antigo por 15 minutos.
+ * Vai ao banco em vez de servir o que já está dentro do token, porque o nome não
+ * está lá. Colocá-lo no token engordaria cada requisição e criaria uma cópia que
+ * envelhece: o médico trocaria o nome e o token continuaria dizendo o antigo pelos
+ * 15 minutos seguintes.
+ *
+ * Mais detalhes: PLAN.md §8.2 · PRODUCT.md — INV-04, INV-07.
  */
 @Injectable()
 export class GetProfileService {
@@ -46,8 +52,9 @@ export class GetProfileService {
     const doctor = await this.doctorRepository.findById(doctorId);
 
     if (!doctor) {
-      // Token assinado por nós apontando para um médico que não existe mais: é a
-      // sessão que não vale, não um recurso alheio (que seria o 404 de INV-04).
+      // Token assinado por nós apontando para um médico que não existe mais. Quem
+      // deixou de valer é a **sessão**, não um recurso de outra pessoa — por isso
+      // 401 ("faça login de novo"), e não 404.
       return left(new UnauthenticatedError(UNAUTHENTICATED_MESSAGE));
     }
 

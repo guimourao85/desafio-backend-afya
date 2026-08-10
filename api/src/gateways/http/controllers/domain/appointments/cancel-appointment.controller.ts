@@ -11,6 +11,19 @@ import {
 import { CancelAppointmentService } from '@/domains/domain/services/appointments/cancel-appointment.service';
 import { CurrentDoctor } from '@/framework/authentication/current-doctor.decorator';
 
+/**
+ * `DELETE /api/appointments/:id` — o "excluir" da tela, que na verdade cancela.
+ *
+ * A linha nunca sai do banco: o status vira `CANCELLED` e o horário volta a
+ * aceitar agendamento. Apagar de verdade destruiria a trilha de atendimento, que
+ * é justamente o que um prontuário existe para guardar.
+ *
+ * Cancelar de novo responde 204 sem reclamar — repetição de rede não é erro, e a
+ * segunda chamada não destrói nada. Cancelar uma consulta **concluída** responde
+ * 422: apagaria o registro de que o atendimento aconteceu.
+ *
+ * Mais detalhes: PRODUCT.md — §regras.
+ */
 @ApiTags('agendamentos')
 @ApiBearerAuth()
 @Controller('appointments')
@@ -52,6 +65,8 @@ export class CancelAppointmentController {
   ): Promise<void> {
     const result = await this.cancelAppointment.execute({ doctorId, appointmentId });
 
+    // Só há um erro possível aqui: a consulta já foi concluída. "Já cancelada" não
+    // cai neste ramo de propósito — ela sai como sucesso, e a resposta é o mesmo 204.
     if (result.isLeft()) {
       throw result.value;
     }

@@ -4,6 +4,7 @@ import {
   CreateDateColumn,
   Entity,
   Index,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
@@ -14,6 +15,7 @@ import {
 // entities nunca esbarraram nisso porque só importam vizinhos de pasta.
 import { Either, left, right } from '../../../shared/errors/either';
 import { BusinessRuleViolationError } from '../../../shared/errors/types';
+import { ConsultationNote } from './consultation-note.entity';
 
 export enum AppointmentStatus {
   SCHEDULED = 'SCHEDULED',
@@ -26,6 +28,9 @@ const CANNOT_RESCHEDULE_MESSAGE = 'Consulta cancelada ou concluída não pode se
 const CANNOT_COMPLETE_MESSAGE = 'Só uma consulta agendada pode ser concluída.';
 const CANNOT_CANCEL_COMPLETED_MESSAGE = 'Consulta já concluída não pode ser cancelada.';
 
+/** INV-05, texto de `PRODUCT.md §regras` (sprint 04.02). */
+const CANNOT_ANNOTATE_CANCELLED_MESSAGE = 'Consulta cancelada não aceita anotações.';
+
 /**
  * O compromisso da agenda — raiz do agregado, e a entidade que carrega a regra
  * central do sistema.
@@ -33,8 +38,8 @@ const CANNOT_CANCEL_COMPLETED_MESSAGE = 'Consulta já concluída não pode ser c
  * Referencia médico e paciente **por ID**, sem `@ManyToOne` (ADR-04). As duas FKs
  * existem no banco, escritas à mão na revisão da migration.
  *
- * `ConsultationNote[]` **não** está aqui: a anotação nasce em F5, e com ela o
- * `@OneToMany` — relação permitida por ser **dentro** do agregado.
+ * `ConsultationNote[]` é a exceção — e é exceção porque é **dentro** do agregado.
+ * ADR-04 proíbe navegar entre agregados; a nota não é um.
  */
 @Entity({ name: 'appointments' })
 // INV-01 no banco, e a única forma de fechar a corrida entre duas requisições
@@ -77,6 +82,23 @@ export class Appointment {
 
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt!: Date;
+
+  /**
+   * As anotações do atendimento.
+   *
+   * **Sem `cascade`, deliberadamente** (sprint 04.02, decisão 18). Salvar a raiz e
+   * deixar o TypeORM propagar seria o caminho idiomático e é uma armadilha: ao
+   * persistir uma raiz cuja coleção está carregada, ele trata a lista como o estado
+   * completo e desassocia o que não estiver nela. Numa raiz lida sem `relations`,
+   * isso apagaria a referência das anotações já gravadas. Quem escreve nota é
+   * `AppointmentRepository.appendNotes`, que grava só as novas.
+   *
+   * Opcional de propósito: `undefined` significa "não carregada", e `[]` significa
+   * "carregada e vazia". O presenter usa exatamente essa diferença para não
+   * publicar `notes: []` numa listagem que não as leu.
+   */
+  @OneToMany(() => ConsultationNote, (note) => note.appointment)
+  notes?: ConsultationNote[];
 
   /** Viva para o índice parcial: é `status <> 'CANCELLED'` em forma de método. */
   isActive(): boolean {
@@ -132,5 +154,33 @@ export class Appointment {
     this.status = AppointmentStatus.CANCELLED;
 
     return right(undefined);
+  }
+
+  /**
+   * **A única fábrica de `ConsultationNote`** (INV-05). Nenhum service ou controller
+   * instancia a entidade interna direto: se pudesse, a checagem de estado abaixo
+   * viraria opcional, e uma nota poderia nascer sem consulta ou numa cancelada.
+   *
+   * `isActive()` — e não `isTerminal()` — porque **concluída aceita anotação**:
+   * anota-se depois de atender, que é o caso normal. Só a cancelada recusa, porque
+   * o atendimento que ela descreveria não aconteceu.
+   */
+  addNote(content: string): Either<BusinessRuleViolationError, ConsultationNote> {
+    if (!this.isActive()) {
+      return left(new BusinessRuleViolationError(CANNOT_ANNOTATE_CANCELLED_MESSAGE));
+    }
+
+    const note = Object.assign(new ConsultationNote(), {
+      appointmentId: this.id,
+      content,
+    });
+
+    // `?? []` porque a raiz pode ter sido lida sem `relations`. A lista pode ficar
+    // parcial, e isso é seguro **por causa do adapter**: `appendNotes` grava apenas
+    // as notas sem identidade. Não confie no `cascade` do TypeORM aqui — ele leria a
+    // lista parcial como o estado completo (decisão 18).
+    this.notes = [...(this.notes ?? []), note];
+
+    return right(note);
   }
 }

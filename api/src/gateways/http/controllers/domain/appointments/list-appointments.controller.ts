@@ -14,6 +14,19 @@ import {
 
 import { ListAppointmentsQueryDto } from '../../../schemas/domain/appointment.schema';
 
+/**
+ * `GET /api/appointments` — a tela de agenda do médico.
+ *
+ * Todos os filtros são opcionais e se combinam: período, paciente e status. Sem
+ * nenhum, devolve a agenda inteira paginada, da próxima consulta para o fim.
+ *
+ * Duas escolhas que o resumo do Swagger não conta: a lista vem sempre embrulhada
+ * em `{ data, meta }` — nunca um array cru, para o cliente não descobrir o formato
+ * rota a rota — e `perPage` tem teto de 100, senão uma query só puxaria a tabela
+ * inteira.
+ *
+ * Mais detalhes: PRODUCT.md — INV-04.
+ */
 @ApiTags('agendamentos')
 @ApiBearerAuth()
 @Controller('appointments')
@@ -51,8 +64,13 @@ export class ListAppointmentsController {
     @CurrentDoctor() doctorId: string,
     @Query() query: ListAppointmentsQueryDto,
   ): Promise<PaginatedHttpResponse<AppointmentHttpResponse>> {
+    // O `doctorId` do token entra antes de qualquer filtro que o cliente mandou.
+    // Numa listagem, esquecer isso não vaza um paciente: vaza a agenda inteira de
+    // todos os consultórios de uma vez. (INV-04)
     const { items, total } = await this.listAppointments.execute({ doctorId, ...query });
 
+    // `totalPages` nasce no presenter, não no caso de uso: quantas páginas existem
+    // é aritmética de tela, não regra de agenda.
     return PaginatedPresenter.toHttp(
       items,
       total,

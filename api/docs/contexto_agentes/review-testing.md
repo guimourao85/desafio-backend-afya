@@ -116,6 +116,24 @@ Invariante sem teste na fase em que nasce é achado **ALTO** — e o gate da fas
 - Nome do teste descreve **comportamento**, não método: "não permite dois agendamentos no mesmo horário" — não "testa scheduleAppointment".
 - Arranjo do caso legível em poucas linhas; setup repetido vira factory em `test/factories`.
 
+### 4. O documento OpenAPI acompanha as rotas
+
+`test/integration/openapi.e2e-spec.ts` prova que `/api/docs` descreve a API **que
+existe**. Sem item de checklist, um teste de documento envelhece calado: ele nasceu
+cobrindo as duas rotas que existiam e continua **verde** sobre esse universo de duas
+enquanto a API cresce para dezessete. Verde sem cobertura é o pior estado possível —
+é o único que ninguém investiga.
+
+- Rota nova aparece nas `paths` do documento, **com o prefixo global**? Ausência é
+  achado **ALTO** — a rota existe e o avaliador não a encontra.
+- A operação tem `summary` e ao menos uma resposta com `example`? Documento que
+  publica rota vazia é pior que documento sem a rota: ele mente com confiança.
+- O teste falharia se alguém removesse os decorators da rota? Se não, ele não é gate.
+
+> Este item existe porque a checagem estática do `[Produto]` (§4 de
+> `review-product.md`) é feita rota a rota, no diff — ninguém percebe quando o
+> **documento inteiro** para de acompanhar. Aqui a asserção é sobre o conjunto.
+
 ### Anti-falso-positivo — não reporte
 
 - Ausência de meta percentual de cobertura: decisão do projeto (a lista de casos obrigatórios é o gate).
@@ -165,6 +183,7 @@ Invariante da fase sem teste → **REPROVADO**, independentemente do resto.
 - [ ] Asserções específicas (status exato, campo exato), não frouxas
 - [ ] Nomes descrevem comportamento
 - [ ] Cada teste falharia se a regra correspondente fosse removida
+- [ ] **Rota nova entrou na asserção de `openapi.e2e-spec.ts`** — com `summary` e exemplo
 <!-- /§checklist -->
 
 ---

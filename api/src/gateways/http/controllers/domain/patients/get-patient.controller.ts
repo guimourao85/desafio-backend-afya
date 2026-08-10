@@ -5,6 +5,16 @@ import { GetPatientService } from '@/domains/domain/services/patients/get-patien
 import { CurrentDoctor } from '@/framework/authentication/current-doctor.decorator';
 import { PatientHttpResponse, PatientPresenter } from '@/presentation/presenters/patient.presenter';
 
+/**
+ * `GET /api/patients/:id` — abre a ficha de um paciente.
+ *
+ * Paciente de outro médico responde **404**, idêntico ao inexistente. Responder
+ * 403 seria mais honesto sobre o que aconteceu, e é exatamente por isso que está
+ * errado: confirmaria que aquele ID existe, entregando a base do consultório
+ * vizinho para quem só tinha um palpite.
+ *
+ * Mais detalhes: PRODUCT.md — INV-04.
+ */
 @ApiTags('pacientes')
 @ApiBearerAuth()
 @Controller('patients')

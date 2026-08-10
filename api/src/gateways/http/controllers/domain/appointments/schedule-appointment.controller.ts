@@ -18,6 +18,19 @@ import {
 
 import { ScheduleAppointmentDto } from '../../../schemas/domain/appointment.schema';
 
+/**
+ * `POST /api/appointments` — marca uma consulta. É a rota que carrega a regra
+ * central do sistema.
+ *
+ * Três coisas precisam ser verdade para o 201 sair: o paciente é deste médico
+ * (senão 404), ele não foi anonimizado por pedido de LGPD (senão 422) e o horário
+ * está livre (senão 409).
+ *
+ * "Livre" quer dizer que não há outra consulta **não cancelada** do mesmo médico
+ * naquele instante exato. Cancelar devolve o horário para a agenda.
+ *
+ * Mais detalhes: PRODUCT.md — INV-01, INV-02, INV-04.
+ */
 @ApiTags('agendamentos')
 @ApiBearerAuth()
 @Controller('appointments')
@@ -75,9 +88,14 @@ export class ScheduleAppointmentController {
     @CurrentDoctor() doctorId: string,
     @Body() body: ScheduleAppointmentDto,
   ): Promise<AppointmentHttpResponse> {
+    // O `doctorId` vem do token e é espalhado sobre o corpo, nunca o contrário: o
+    // schema é `.strict()`, então mandar `doctorId` no JSON responde 400. Se ele
+    // pudesse chegar pelo corpo, qualquer médico agendaria na agenda de qualquer
+    // outro. (INV-04)
     const result = await this.scheduleAppointment.execute({ doctorId, ...body });
 
     if (result.isLeft()) {
+      // `throw` entrega o erro ao filtro global, que traduz para status e mensagem.
       throw result.value;
     }
 

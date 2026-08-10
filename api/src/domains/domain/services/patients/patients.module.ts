@@ -9,13 +9,16 @@ import { RegisterPatientService } from './register-patient.service';
 import { UpdatePatientService } from './update-patient.service';
 
 /**
- * O contexto de pacientes: cadastro, perfil e conformidade LGPD.
+ * O contexto de pacientes: cadastro, ficha e conformidade com a LGPD.
  *
- * Exporta os **services**, nunca `PATIENTS_REPOSITORY`. Em Nest a fronteira do
- * agregado é literalmente o `exports`: o token exportado daria a qualquer módulo a
- * tabela `patients` por baixo de toda regra desta pasta — inclusive do filtro por
- * médico. Quem precisa de paciente importa este módulo e injeta
- * `FindPatientSummaryService`.
+ * Exporta os **casos de uso**, nunca o acesso direto à tabela. No Nest, a fronteira
+ * entre módulos é literalmente esta lista de `exports`: publicar o token do
+ * repositório daria a qualquer outro módulo a tabela `patients` por baixo de toda
+ * regra desta pasta — inclusive por baixo do filtro por médico.
+ *
+ * Quem precisa de paciente importa este módulo e usa `FindPatientSummaryService`.
+ *
+ * Mais detalhes: PRODUCT.md — §dominios.
  */
 @Module({
   providers: [

@@ -15,14 +15,25 @@ export interface GetPatientRequest {
 export type GetPatientResult = Either<ResourceNotFoundError, Patient>;
 
 /**
- * O texto é o mesmo para "não existe" e para "é de outro médico" — e é o mesmo 404.
- * Responder 403 no segundo caso confirmaria que o recurso existe e vazaria a base de
- * outro consultório: a ausência é indistinguível da falta de permissão, de propósito
- * (INV-04).
+ * O mesmo texto para dois casos diferentes: "não existe" e "existe, mas é de outro
+ * médico". E o mesmo 404 nos dois.
+ *
+ * Responder 403 no segundo caso seria mais honesto sobre o que aconteceu, e é
+ * justamente por isso que está errado: confirmaria que aquele id é de um paciente
+ * real, entregando a base do consultório vizinho para quem só tinha um palpite. A
+ * ausência é indistinguível da falta de permissão, de propósito. (INV-04)
  */
 export const PATIENT_NOT_FOUND_MESSAGE = 'Paciente não encontrado.';
 
-/** Consulta o perfil de um paciente do médico autenticado. */
+/**
+ * Abre a ficha de um paciente da base do médico autenticado.
+ *
+ * A busca no banco já vai filtrada pelo médico do token, então paciente alheio nem
+ * chega a ser lido. Não é um `if` de permissão depois de encontrar: é uma busca que
+ * nunca encontra.
+ *
+ * Mais detalhes: PRODUCT.md — INV-04.
+ */
 @Injectable()
 export class GetPatientService {
   constructor(

@@ -10,6 +10,23 @@ import {
 
 import { RefreshTokenDto } from '../../../schemas/domain/authentication.schema';
 
+/**
+ * `POST /api/auth/refresh` — troca um refresh token válido por um access novo.
+ *
+ * Existe porque o access dura só 15 minutos. Em vez de pedir a senha de novo a
+ * cada 15 minutos, o cliente guarda o refresh (8 horas) e pede um access novo
+ * quando o antigo morre.
+ *
+ * O refresh **não** é trocado nessa operação: continua o mesmo até expirar ou até
+ * o logout. A consequência prática é boa — duas abas renovando ao mesmo tempo
+ * recebem dois access válidos e nenhuma perde a sessão.
+ *
+ * Refresh inexistente, expirado e revogado respondem os três a mesma coisa: dizer
+ * qual dos três aconteceu confirmaria informação para quem só tem um palpite, e o
+ * cliente faz a mesma coisa nos três casos — login de novo.
+ *
+ * Mais detalhes: PRODUCT.md — §regras.
+ */
 @ApiTags('autenticação')
 @Controller('auth')
 export class RefreshSessionController {

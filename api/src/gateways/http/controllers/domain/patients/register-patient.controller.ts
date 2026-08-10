@@ -7,6 +7,20 @@ import { PatientHttpResponse, PatientPresenter } from '@/presentation/presenters
 
 import { RegisterPatientDto } from '../../../schemas/domain/patient.schema';
 
+/**
+ * `POST /api/patients` — cadastra um paciente.
+ *
+ * Só o nome é obrigatório. Telefone, email, nascimento, sexo, altura e peso são
+ * todos opcionais: o cadastro precisa funcionar com o que o médico tem em mãos na
+ * hora, não com a ficha completa.
+ *
+ * Email **não** é único — dois pacientes podem dividir o email de um familiar.
+ *
+ * O paciente nasce vinculado ao médico do token, e não existe forma de cadastrar
+ * na base de outro: `doctorId` simplesmente não faz parte do corpo aceito.
+ *
+ * Mais detalhes: PRODUCT.md — INV-04.
+ */
 @ApiTags('pacientes')
 @ApiBearerAuth()
 @Controller('patients')

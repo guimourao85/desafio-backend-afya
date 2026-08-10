@@ -50,6 +50,27 @@ api/docs/desenvolvimento/sprints/sprint-NN.MM-<escopo-em-kebab>.md
 - Toda linha `NN.MM` **tem** uma fase `FN` correspondente em
   [PRODUCT.md §roadmap](PRODUCT.md). Sub-doc sem linha na tabela é órfão; fase sem
   sub-doc é trabalho sem registro.
+- **Exceção: sub-doc sem fase.** Trabalho real que nenhuma fase previu — sprint
+  transversal, registro de sessão, planejamento antecipado, investigação — recebe o
+  **próximo `MM` livre da sprint corrente**, porque o sub-doc é registro de execução
+  e mora onde o trabalho aconteceu. A numeração já planejada no `§roadmap` é
+  **reservada**: não se desloca, não recebe sub-doc intercalado, e o acréscimo não
+  vira sprint nova nem sub-doc de sprint futura. A linha no `§roadmap` entra com
+  fase `—` e declara a data e o motivo. Precedente: `06.01` (rigor transversal,
+  09/08/2026). **Isso não é órfão nem débito** — órfão é o sub-doc que nunca ganha a
+  linha.
+- **Registro de planejamento não vira sub-doc próprio.** Planejar uma sprint futura é
+  produzir o insumo da fricção PRÉ **dela** — o resultado mora **dentro do sub-doc
+  planejado**, não num sub-doc de sessão à parte. A regra da exceção acima cobre
+  trabalho que não tem doc de destino; planejamento sempre tem. Decisão do usuário,
+  10/08/2026, ao dissolver o `04.03` para dentro da
+  [sprint-05.01](desenvolvimento/sprints/sprint-05.01-swagger-e-seed.md).
+- **O que entra é a conclusão, não a escavação.** Medir o código antes de planejar é
+  obrigatório; o **resultado** da medição vira §escopo, §decisoes e §edge-cases. A
+  tabela de "o que o plano previa × o que o código tem" **não** vira seção do sub-doc:
+  ela é um retrato com prazo de validade, e o sub-doc é live (regra abaixo). Um plano
+  que descreve o passado obriga quem for executá-lo a descobrir sozinho qual das duas
+  metades ainda vale. Decisão do usuário, 10/08/2026.
 - O doc é criado **antes** de codificar, com §objetivo, §decisoes, §nomes, §escopo e
   §edge-cases preenchidos. §scores e §issues nascem vazios e crescem durante a sprint.
 - Arquivo **live**: reflete o estado atual. História é o `git log`.
@@ -205,6 +226,7 @@ Todo caminho parte de `api/` (PLAN §10), exceto onde marcado `RAIZ`.
 - [ ] Testes: caminho feliz + erro esperado + edge case, determinísticos (`review-testing.md §regras`)
 - [ ] Scores ≥ 9/10 na fricção PÓS; zero CRÍTICO e zero ALTO em aberto
 - [ ] Docs atualizadas: `PRODUCT.md §roadmap` (estado) · `§invariantes`/`§adrs` se mudou · `DEBITOS-TECNICOS.md` se nasceu limite conhecido
+- [ ] **`README.md` (RAIZ) atualizado se a sprint mudou o que o avaliador vê** — rota nova, comando novo, estado do projeto. O README ficou anunciando "F1 concluída" até a F5 porque esta linha não existia
 <!-- /§checklist -->
 
 ---

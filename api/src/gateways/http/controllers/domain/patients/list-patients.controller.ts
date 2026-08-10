@@ -11,6 +11,18 @@ import { PatientHttpResponse, PatientPresenter } from '@/presentation/presenters
 
 import { ListPatientsQueryDto } from '../../../schemas/domain/patient.schema';
 
+/**
+ * `GET /api/patients` — a lista de pacientes do médico, com busca por nome.
+ *
+ * Dois limites declarados de propósito: a busca ignora maiúscula e minúscula mas
+ * **não** ignora acento — "alvares" não acha "Álvares" —, e `perPage` para em 100,
+ * senão uma única query puxaria a base inteira.
+ *
+ * Base vazia é 200 com lista vazia, nunca 404: "você ainda não tem pacientes" é
+ * uma resposta, não um erro.
+ *
+ * Mais detalhes: PRODUCT.md — INV-04.
+ */
 @ApiTags('pacientes')
 @ApiBearerAuth()
 @Controller('patients')
@@ -51,8 +63,12 @@ export class ListPatientsController {
     @CurrentDoctor() doctorId: string,
     @Query() query: ListPatientsQueryDto,
   ): Promise<PaginatedHttpResponse<PatientHttpResponse>> {
+    // O `doctorId` do token entra antes do termo de busca. Sem ele, procurar por
+    // "maria" devolveria as Marias de todos os consultórios. (INV-04)
     const { items, total } = await this.listPatients.execute({ doctorId, ...query });
 
+    // O presenter é a única via de saída: é ele que decide o que o cliente vê e o
+    // que fica dentro do banco.
     return PaginatedPresenter.toHttp(items, total, query.page, query.perPage, PatientPresenter.toHttp);
   }
 }

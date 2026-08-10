@@ -19,11 +19,19 @@ export interface ListAppointmentsRequest {
 }
 
 /**
- * A agenda do médico, com filtros combináveis (RF-04).
+ * A agenda do médico, com filtros que se combinam: período, paciente e status.
  *
- * Sem `Either`: agenda vazia é resultado legítimo. Todos os filtros são opcionais —
- * sem nenhum, a rota devolve a agenda inteira paginada, que é o que a tela inicial
- * do wireframe mostra.
+ * **Não devolve erro em caso nenhum**, e isso é escolha, não esquecimento: agenda
+ * vazia é resultado legítimo — lista vazia com 200, nunca 404. Pedir uma página
+ * além do fim também devolve vazio, em vez de estourar.
+ *
+ * Todos os filtros são opcionais. Sem nenhum, sai a agenda inteira paginada, que é
+ * o que a tela inicial mostra.
+ *
+ * O método tem uma linha de propósito: não há regra de negócio numa listagem. Quem
+ * sabe filtrar por médico, ordenar e paginar é a camada de persistência.
+ *
+ * Atende RF-04. Mais detalhes: PRODUCT.md — INV-04.
  */
 @Injectable()
 export class ListAppointmentsService {

@@ -30,18 +30,24 @@ export type RefreshSessionResult = Either<
 const INVALID_REFRESH_MESSAGE = 'Sessão expirada. Faça login novamente.';
 
 /**
- * Mesmo texto do 401 do `JwtAuthGuard`. A duplicação do literal é consciente
- * (ADR-06 recusa catálogo de mensagens): o domínio não importa `framework/`.
+ * O mesmo texto que o guard de autenticação usa no 401 dele. O literal está
+ * repetido de propósito: um catálogo central de mensagens faria o domínio depender
+ * da camada de framework, e isso custa mais do que a repetição. (ADR-06)
  */
 const UNAUTHENTICATED_MESSAGE = 'Autenticação necessária.';
 
 /**
- * Renova o access token a partir de um refresh válido (PLAN.md §8.2).
+ * Renova o access token a partir de um refresh válido.
  *
- * **Não há rotação** (ADR-11): o refresh não muda de estado aqui. Duas chamadas
- * concorrentes — duas abas, um retry — devolvem dois access tokens válidos e
- * ninguém perde a sessão. Essa é a simplificação que torna a operação idempotente
- * de graça.
+ * **O refresh não é trocado aqui** — ele continua o mesmo até expirar ou até o
+ * logout. A consequência prática é boa: duas abas renovando ao mesmo tempo, ou um
+ * retry de rede, devolvem dois access válidos e nenhuma das duas perde a sessão. É
+ * uma simplificação que sai de graça: repetir a operação não quebra nada.
+ *
+ * O preço declarado: um refresh roubado vale até expirar, porque não existe o
+ * mecanismo de "usou uma vez, o antigo morre" que denunciaria o roubo.
+ *
+ * Mais detalhes: PLAN.md §8.2 · PRODUCT.md — ADR-11, INV-06.
  */
 @Injectable()
 export class RefreshSessionService {
@@ -54,9 +60,9 @@ export class RefreshSessionService {
   ) {}
 
   async execute({ refreshToken }: RefreshSessionRequest): Promise<RefreshSessionResult> {
-    // O cru vira hash **aqui**, antes de qualquer ida ao banco (INV-06). A porta
-    // recebe hash e nada mais — é o que impede o valor cru de escorregar para uma
-    // consulta e, dali, para uma coluna.
+    // O token em texto puro vira hash **aqui**, antes de qualquer ida ao banco. O
+    // contrato de persistência só aceita hash — é o que impede o valor cru de
+    // escorregar para dentro de uma consulta e, dali, para uma coluna. (INV-06)
     const session = await this.refreshTokenRepository.findValidByHash(
       this.tokenIssuer.hashRefreshToken(refreshToken),
     );
@@ -65,14 +71,15 @@ export class RefreshSessionService {
       return left(new InvalidRefreshTokenError(INVALID_REFRESH_MESSAGE));
     }
 
-    // O `email` vai no payload do access e não está guardado na sessão: buscar o
-    // médico é o que impede uma cópia desnormalizada que envelhece.
+    // O email entra no novo access token, e ele não está guardado na sessão. Buscar
+    // o médico agora é o que evita uma cópia que envelhece: se ele trocasse o email,
+    // uma cópia guardada continuaria repetindo o antigo.
     const doctor = await this.doctorRepository.findById(session.doctorId);
 
     if (!doctor) {
-      // Sessão válida apontando para ninguém: quem não vale mais é a **sessão**,
-      // não um recurso ausente — daí 401, e não o 404 de INV-04, que fala de dado
-      // de outro médico.
+      // Sessão válida apontando para um médico que não existe mais. Quem deixou de
+      // valer é a **sessão**, não um recurso que sumiu — por isso 401 ("faça login
+      // de novo") e não 404.
       return left(new UnauthenticatedError(UNAUTHENTICATED_MESSAGE));
     }
 

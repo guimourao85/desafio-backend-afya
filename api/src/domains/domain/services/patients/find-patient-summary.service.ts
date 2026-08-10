@@ -13,8 +13,10 @@ export interface FindPatientSummaryRequest {
 }
 
 /**
- * O mínimo que outro módulo precisa saber sobre um paciente: que ele existe, é do
- * médico certo, como se chama e se ainda aceita operação (INV-02).
+ * O mínimo que outro módulo precisa saber sobre um paciente: que ele existe, que é
+ * do médico certo, como se chama, e se ainda aceita operação — `isAnonymized` é o
+ * que o agendamento consulta para recusar consulta nova a quem pediu esquecimento.
+ * (INV-02)
  */
 export interface PatientSummary {
   id: string;
@@ -25,17 +27,19 @@ export interface PatientSummary {
 export type FindPatientSummaryResult = Either<ResourceNotFoundError, PatientSummary>;
 
 /**
- * **A API pública do `PatientsModule`** — a única porta pela qual outro módulo
- * pergunta sobre um paciente (PRODUCT.md §dominios).
+ * **A porta pública do módulo de pacientes** — a única forma de outro módulo
+ * perguntar alguma coisa sobre um paciente.
  *
- * Nasce nesta sprint mesmo sem consumidor: em F4, `AppointmentsModule` precisa saber
- * se o paciente existe e está ativo antes de agendar. Se este service só nascesse
- * lá, a saída fácil seria injetar `PATIENTS_REPOSITORY` ou dar um `JOIN` em
- * `patients` — os dois furam a fronteira do agregado, e os dois são difíceis de
- * desfazer depois. A fronteira nasce antes da pressão que a testaria.
+ * Quem usa: o agendamento. Antes de marcar uma consulta ele precisa saber se o
+ * paciente existe, se é deste médico e se ainda aceita operação. Pergunta aqui, e
+ * não no repositório de pacientes nem com um `JOIN` na tabela `patients` — os dois
+ * atalhos furam a fronteira entre os módulos, e são difíceis de desfazer depois de
+ * escritos.
  *
- * Devolve `PatientSummary`, não a entity: quem está do outro lado da fronteira não
- * precisa de telefone, email nem nascimento para agendar uma consulta.
+ * Devolve um resumo, não o paciente inteiro: quem está do outro lado da fronteira
+ * não precisa de telefone, email nem data de nascimento para marcar uma consulta.
+ *
+ * Mais detalhes: PRODUCT.md — §dominios, INV-02, INV-04.
  */
 @Injectable()
 export class FindPatientSummaryService {

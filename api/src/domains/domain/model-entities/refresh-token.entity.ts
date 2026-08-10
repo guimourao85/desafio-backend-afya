@@ -1,13 +1,19 @@
 import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn, Unique } from 'typeorm';
 
 /**
- * O refresh token persistido. Agregado próprio: `Doctor` é referenciado **por ID**,
- * sem `@ManyToOne` (ADR-04) — relação navegável entre agregados abre o join que a
- * fronteira existe para impedir.
+ * A sessão guardada no banco — o que permite renovar o login sem pedir a senha de
+ * novo, e o que o logout revoga.
  *
- * A FK `fk_refresh_tokens_doctors` existe no banco mesmo assim, escrita à mão na
- * revisão da migration: integridade referencial é decisão de persistência, e não
- * precisa de relação no modelo para valer.
+ * Aponta para o médico **por id**, sem relação navegável. É deliberado: uma relação
+ * navegável abriria o caminho de, a partir de uma sessão, puxar o médico e daí a
+ * base inteira dele numa consulta só — exatamente o atalho que a separação entre
+ * áreas existe para impedir.
+ *
+ * A chave estrangeira **existe no banco** mesmo assim, escrita à mão na revisão da
+ * migration: garantir que a sessão aponte para um médico real é decisão de
+ * persistência, e não depende de existir relação no modelo.
+ *
+ * Mais detalhes: PRODUCT.md — ADR-04.
  */
 @Entity({ name: 'refresh_tokens' })
 @Unique('uk_refresh_tokens_hash', ['tokenHash'])
@@ -21,9 +27,14 @@ export class RefreshToken {
   doctorId!: string;
 
   /**
-   * SHA-256 hex do token — 64 caracteres, sempre (INV-06). `char(64)` e não
-   * `varchar`: o comprimento é fixo por definição do algoritmo, e o tipo que o diz
-   * é o que denuncia no banco qualquer coisa gravada em claro.
+   * A versão embaralhada do token — 64 caracteres, sempre, porque é o tamanho fixo
+   * que o algoritmo produz.
+   *
+   * O tipo declara esse comprimento fixo em vez de aceitar "texto de até N": é o
+   * que faz o **banco denunciar** qualquer tentativa de gravar o token em texto
+   * puro, que teria outro tamanho. A defesa não depende de ninguém lembrar da regra.
+   *
+   * Se este banco vazar, os tokens gravados nele não servem para entrar. (INV-06)
    */
   @Column({ name: 'token_hash', type: 'char', length: 64 })
   tokenHash!: string;

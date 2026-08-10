@@ -15,8 +15,10 @@ import {
   RevokeSessionController,
 } from './controllers/domain/authentication';
 import {
+  AddConsultationNoteController,
   CancelAppointmentController,
   GetAppointmentController,
+  GetPatientTimelineController,
   ListAppointmentsController,
   ScheduleAppointmentController,
   UpdateAppointmentController,
@@ -52,6 +54,11 @@ import { ZodValidationPipe } from './pipes/zod-validation-pipe';
     RegisterPatientController,
     ListPatientsController,
     GetPatientController,
+    // Antes do `GetPatientController` seria indiferente — `:id` do Express não casa
+    // com barra, então `/patients/:id` nunca disputa com `/patients/:id/appointments`.
+    // Fica aqui por leitura: a linha do tempo é uma rota de paciente, ainda que o
+    // controller viva no pacote de agendamentos (decisão 13).
+    GetPatientTimelineController,
     UpdatePatientController,
     AnonymizePatientController,
     ScheduleAppointmentController,
@@ -59,6 +66,7 @@ import { ZodValidationPipe } from './pipes/zod-validation-pipe';
     GetAppointmentController,
     UpdateAppointmentController,
     CancelAppointmentController,
+    AddConsultationNoteController,
   ],
   providers: [
     { provide: APP_PIPE, useClass: ZodValidationPipe },

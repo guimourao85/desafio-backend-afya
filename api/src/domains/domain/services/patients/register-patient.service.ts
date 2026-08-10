@@ -6,12 +6,12 @@ import { Patient, PatientSex } from '../../model-entities/patient.entity';
 import { PatientRepository } from '../../repositories/patient.repository';
 
 export interface RegisterPatientRequest {
-  /** Vem do token, via `@CurrentDoctor()` — nunca do payload (INV-04). */
+  /** Vem do token, via `@CurrentDoctor()` — nunca do corpo da requisição. (INV-04) */
   doctorId: string;
   name: string;
   phone?: string | null;
   email?: string | null;
-  /** `'YYYY-MM-DD'` — coluna `date`, sem hora e sem fuso. */
+  /** `'YYYY-MM-DD'`. Data pura: nascimento não tem hora nem fuso horário. */
   birthDate?: string | null;
   sex?: PatientSex | null;
   heightM?: number | null;
@@ -19,13 +19,15 @@ export interface RegisterPatientRequest {
 }
 
 /**
- * Cadastra um paciente na base do médico autenticado (RF-01).
+ * Cadastra um paciente na base do médico autenticado.
  *
- * **Sem `Either`**, pela mesma razão do `RevokeSessionService`: não há erro
- * esperado. Formato inválido morre na borda Zod, e não há regra de negócio que
- * recuse um cadastro — nem unicidade de email (dois pacientes podem dividir o email
- * de um familiar). Um `Left` de tipo `never` obrigaria todo controller a escrever um
- * ramo morto.
+ * **Não devolve erro em caso nenhum**, e isso é escolha: formato inválido já morreu
+ * na validação da borda, e não existe regra de negócio que recuse um cadastro — nem
+ * email repetido, porque dois pacientes podem dividir o email de um familiar.
+ *
+ * Só o nome é obrigatório. O resto entra com o que o médico tiver em mãos na hora.
+ *
+ * Atende RF-01. Mais detalhes: PRODUCT.md — INV-04.
  */
 @Injectable()
 export class RegisterPatientService {
@@ -38,8 +40,9 @@ export class RegisterPatientService {
     const patient = Object.assign(new Patient(), {
       doctorId,
       name: data.name,
-      // `?? null` em vez de deixar `undefined`: a coluna é nula, e `undefined`
-      // faria o TypeORM omitir o campo do INSERT em vez de gravar NULL.
+      // `?? null` em vez de deixar `undefined`: a coluna aceita nulo, e `undefined`
+      // faria o TypeORM **omitir o campo** do INSERT em vez de gravar NULL. A
+      // diferença é sutil e só aparece depois, na leitura.
       phone: data.phone ?? null,
       email: data.email ?? null,
       birthDate: data.birthDate ?? null,

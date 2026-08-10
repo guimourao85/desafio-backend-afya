@@ -6,6 +6,21 @@ import { Public } from '@/framework/authentication/public.decorator';
 
 import { RefreshTokenDto } from '../../../schemas/domain/authentication.schema';
 
+/**
+ * `POST /api/auth/logout` — encerra a sessão.
+ *
+ * Logout nunca falha: token desconhecido, expirado ou já revogado respondem 204
+ * igual. Não há o que informar — em todos os casos o cliente joga o token fora.
+ *
+ * **O que este logout não faz:** derrubar o access token que já está na mão de
+ * alguém. O access se valida sozinho, sem consultar o banco, então quem tem um
+ * continua entrando por até 15 minutos. O que o logout garante é que a sessão
+ * **não se renova** — depois disso ela morre sozinha. Encurtar essa janela
+ * exigiria consultar uma lista de bloqueio em toda requisição, que é exatamente o
+ * custo que este desenho existe para evitar.
+ *
+ * Mais detalhes: PRODUCT.md — §regras · DEBITOS-TECNICOS.md — DEBT-11.
+ */
 @ApiTags('autenticação')
 @Controller('auth')
 export class RevokeSessionController {

@@ -6,9 +6,19 @@ import {
   AppointmentFilters,
   AppointmentPage,
   AppointmentRepository,
+  PatientTimelineFilters,
 } from '@/domains/domain/repositories/appointment.repository';
 
 let sequence = 0;
+
+/**
+ * O relógio do duplo: um instante fixo mais N segundos, e não `new Date()`.
+ *
+ * Duas notas gravadas no mesmo milissegundo teriam ordem indefinida, e o teste que
+ * cobre "anotações na ordem em que foram escritas" passaria ou falharia conforme a
+ * velocidade da máquina — a espécie de flakiness mais cara de diagnosticar.
+ */
+let noteSequence = 0;
 
 export function makeAppointment(overrides: Partial<Appointment> = {}): Appointment {
   sequence += 1;
@@ -56,8 +66,44 @@ export class InMemoryAppointmentRepository implements AppointmentRepository {
     return appointment;
   }
 
+  /**
+   * Mesmo critério do adapter real: **só a nota sem `id`** é gravada, e é ela que
+   * ganha identidade e carimbo — como o `RETURNING` do Postgres faria. Um duplo que
+   * devolvesse a nota sem `id` faria o presenter passar no teste e quebrar em
+   * produção; um que gravasse a lista inteira esconderia a armadilha da decisão 18.
+   */
+  async appendNotes(appointment: Appointment): Promise<Appointment> {
+    for (const note of appointment.notes ?? []) {
+      if (note.id) continue;
+
+      noteSequence += 1;
+      note.id = `00000000-0000-4000-8000-${String(noteSequence).padStart(12, '0')}`;
+      note.createdAt = new Date(Date.UTC(2026, 7, 10, 12, 0, noteSequence));
+      note.updatedAt = note.createdAt;
+    }
+
+    const index = this.items.findIndex((item) => item.id === appointment.id);
+
+    if (index >= 0) this.items[index] = appointment;
+
+    return appointment;
+  }
+
   async findByIdForDoctor(id: string, doctorId: string): Promise<Appointment | null> {
     return this.items.find((item) => item.id === id && item.doctorId === doctorId) ?? null;
+  }
+
+  async findByIdWithNotes(id: string, doctorId: string): Promise<Appointment | null> {
+    const appointment = await this.findByIdForDoctor(id, doctorId);
+
+    // O adapter real devolve `[]` quando não há nota, porque o `leftJoin` sempre
+    // materializa a relação. Um duplo que deixasse `undefined` aqui faria o teste do
+    // presenter provar o contrário do que produção faz.
+    if (appointment && !appointment.notes) appointment.notes = [];
+
+    appointment?.notes?.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+    return appointment;
   }
 
   async findActiveBySlot(
@@ -92,6 +138,29 @@ export class InMemoryAppointmentRepository implements AppointmentRepository {
       .filter((item) => !patientId || item.patientId === patientId)
       .filter((item) => !status || item.status === status)
       .sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
+
+    return {
+      items: scoped.slice((page - 1) * perPage, page * perPage),
+      total: scoped.length,
+    };
+  }
+
+  async listByPatientWithNotes({
+    doctorId,
+    patientId,
+    page,
+    perPage,
+  }: PatientTimelineFilters): Promise<AppointmentPage> {
+    const scoped = this.items
+      // `doctorId` **e** `patientId`: o duplo tem de reproduzir INV-04, senão o
+      // teste de isolamento entre consultórios passaria com a regra quebrada.
+      .filter((item) => item.doctorId === doctorId && item.patientId === patientId)
+      // Histórico do mais recente para trás — o inverso de `list`.
+      .sort((a, b) => b.scheduledAt.getTime() - a.scheduledAt.getTime());
+
+    for (const appointment of scoped) {
+      appointment.notes?.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    }
 
     return {
       items: scoped.slice((page - 1) * perPage, page * perPage),

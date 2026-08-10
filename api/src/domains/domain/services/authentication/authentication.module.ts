@@ -11,10 +11,13 @@ import { RevokeSessionService } from './revoke-session.service';
 /**
  * O contexto de autenticação: médico e sessão.
  *
- * Exporta **só o service**. Os dois tokens de repositório ficam privados de
- * propósito — outro módulo que precise de médico importa este e chama o caso de
- * uso; injetar `DOCTORS_REPOSITORY` de fora seria alcançar o banco de outro
- * agregado por baixo da regra.
+ * Exporta **só os casos de uso**, nunca o acesso direto às tabelas. Os dois tokens
+ * de repositório ficam privados de propósito: publicá-los daria a qualquer outro
+ * módulo as tabelas de médico e de sessão por baixo de toda regra desta pasta.
+ *
+ * Quem precisa de médico importa este módulo e chama o caso de uso.
+ *
+ * Mais detalhes: PRODUCT.md — §dominios.
  */
 @Module({
   imports: [CryptographyModule],

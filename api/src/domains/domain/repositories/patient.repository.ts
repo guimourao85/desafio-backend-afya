@@ -15,15 +15,19 @@ export interface PatientPage {
 }
 
 /**
- * A porta de persistência do paciente.
+ * O contrato de acesso ao banco de pacientes — a lista do que o sistema sabe fazer
+ * com a tabela, sem dizer como.
  *
- * **Todo** método recebe `doctorId`, inclusive os de escrita. Não é redundância:
- * INV-04 diz que nenhum dado é lido ou escrito fora do escopo do médico do token, e
- * uma assinatura que aceita a operação sem o dono transforma essa invariante em
- * disciplina de quem escreve o próximo service. Aqui, esquecer não compila.
+ * **Todo** método recebe o médico dono, inclusive os de escrita. Não é redundância:
+ * a regra "nenhum dado é lido ou escrito fora do consultório de quem está logado"
+ * precisa de algo mais forte que boa vontade. Numa assinatura que aceitasse a
+ * operação sem o dono, a regra viraria disciplina de quem escrever o próximo
+ * service — e disciplina falha em silêncio. Aqui, esquecer **não compila**.
  *
- * `findByIdForDoctor` tem esse nome — e não `findById` — porque o nome é a primeira
- * documentação de que a busca é escopada.
+ * `findByIdForDoctor` se chama assim, e não `findById`, porque o nome é a primeira
+ * documentação de que a busca é filtrada.
+ *
+ * Mais detalhes: PRODUCT.md — INV-04.
  */
 export interface PatientRepository {
   create(patient: Patient): Promise<Patient>;

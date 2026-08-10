@@ -1,18 +1,22 @@
 import { ValueTransformer } from 'typeorm';
 
 /**
- * O conserto de uma armadilha do TypeORM: coluna `numeric` volta do Postgres como
- * **string**. Sem isto, `heightM` chega ao presenter como `"1.68"` e a API publica
- * texto onde o contrato promete número (PLAN.md §6.4).
+ * O conserto de uma armadilha silenciosa: coluna numérica de precisão exata volta
+ * do Postgres como **texto**, não como número.
  *
- * Fica num arquivo próprio porque vale para **toda** coluna `numeric` futura — peso,
- * altura e o que vier. Repetir o objeto literal em cada `@Column` é a forma de
- * esquecê-lo em uma delas.
+ * Sem isto, a altura sai da API como `"1.68"` — entre aspas — onde o contrato
+ * promete `1.68`. O cliente que fizer conta com esse valor recebe lixo, e nada
+ * quebra até lá.
  *
- * O driver não é convencido a devolver número: `numeric` é arbitrário e não cabe
- * em `double` sem perda, então a lib entrega a representação exata e deixa a
- * conversão para quem conhece a faixa. Aqui a faixa é altura e peso de gente —
- * `Number` dá conta.
+ * Mora em arquivo próprio porque vale para **toda** coluna desse tipo, presente e
+ * futura. Repetir o objeto em cada campo é a receita para esquecer em um deles.
+ *
+ * Por que o driver não devolve número sozinho: esse tipo de coluna guarda valores
+ * de precisão arbitrária, que nem sempre cabem num número de ponto flutuante sem
+ * perda. A biblioteca entrega a representação exata e deixa a conversão para quem
+ * conhece a faixa de valores. Aqui a faixa é altura e peso de gente — cabe.
+ *
+ * Mais detalhes: PLAN.md §6.4.
  */
 export const numericTransformer: ValueTransformer = {
   to: (value: number | null): number | null => value,

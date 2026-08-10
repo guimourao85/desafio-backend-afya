@@ -14,6 +14,21 @@ import { PatientHttpResponse, PatientPresenter } from '@/presentation/presenters
 
 import { UpdatePatientDto } from '../../../schemas/domain/patient.schema';
 
+/**
+ * `PATCH /api/patients/:id` — corrige o cadastro de um paciente.
+ *
+ * `PATCH` de verdade: só os campos enviados mudam. A diferença entre omitir e
+ * mandar `null` é significativa — `phone: null` **apaga** o telefone, enquanto não
+ * mandar `phone` o deixa como está.
+ *
+ * Corpo vazio é 400, não 200: sem isso, `PATCH {}` devolveria o paciente intacto e
+ * o cliente concluiria que a edição foi aplicada.
+ *
+ * Paciente anonimizado responde 422 — aceitar a edição reintroduziria pela porta
+ * dos fundos os dados pessoais que alguém pediu para apagar.
+ *
+ * Mais detalhes: PRODUCT.md — INV-02, INV-04.
+ */
 @ApiTags('pacientes')
 @ApiBearerAuth()
 @Controller('patients')
@@ -66,9 +81,12 @@ export class UpdatePatientController {
     @Param('id', ParseUUIDPipe) patientId: string,
     @Body() body: UpdatePatientDto,
   ): Promise<PatientHttpResponse> {
+    // `doctorId` do token + `patientId` da URL: os dois entram no `WHERE`. Editar o
+    // paciente de outro médico não é 403, é 404 — o mesmo que não existir. (INV-04)
     const result = await this.updatePatient.execute({ doctorId, patientId, ...body });
 
     if (result.isLeft()) {
+      // `throw` entrega o erro ao filtro global, que traduz para status e mensagem.
       throw result.value;
     }
 

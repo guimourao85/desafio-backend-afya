@@ -7,12 +7,16 @@ import { PRONTOMED_POSTGRES_DATA_SOURCE } from '@/shared/constants';
 import { DOCTORS_REPOSITORY, REFRESH_TOKENS_REPOSITORY } from '@/shared/constants/repositories';
 
 /**
- * O ponto onde porta e adapter se encontram (ADR-02). Vive ao lado dos services, e
- * não em `infrastructure/`, porque é o **módulo de domínio** que declara de que
- * implementação precisa — a infraestrutura só a oferece.
+ * O ponto onde o contrato encontra a implementação.
  *
- * Cada token entrega o adapter, nunca o `Repository<T>` do TypeORM: trocar Postgres
- * por outra coisa é reescrever estes dois arquivos, e mais nada.
+ * Cada token entrega a classe que fala com o Postgres, amarrada ao **contrato** e
+ * não ao TypeORM: nenhum caso de uso enxerga o ORM. Trocar Postgres por outra coisa
+ * é reescrever este arquivo e os adapters, e mais nada.
+ *
+ * Mora junto dos services, e não na pasta de infraestrutura, porque quem declara de
+ * que implementação precisa é o módulo de domínio. A infraestrutura só a oferece.
+ *
+ * Mais detalhes: PRODUCT.md — ADR-02.
  */
 export const authenticationProviders: Provider[] = [
   {

@@ -25,16 +25,24 @@ export type UpdatePatientResult = Either<
   Patient
 >;
 
-/** INV-02: anonimizado é registro contábil, não perfil ativo. */
+/**
+ * Paciente anonimizado virou registro contábil sem identidade, não perfil ativo —
+ * ele existe para o histórico fazer sentido, não para ser editado. (INV-02)
+ */
 const ANONYMIZED_PATIENT_MESSAGE = 'Paciente anonimizado (LGPD) não pode ser editado.';
 
 /**
- * Corrige o perfil de um paciente (RF-02).
+ * Corrige o cadastro de um paciente.
  *
- * `PATCH` de verdade: só os campos presentes mudam. A diferença entre "não veio" e
- * "veio nulo" é significativa aqui — `phone: null` **apaga** o telefone, enquanto a
- * ausência de `phone` o deixa como está. Por isso a checagem é `!== undefined`, e
- * não um `??` que confundiria os dois.
+ * `PATCH` de verdade: só os campos que vieram na requisição mudam. A diferença
+ * entre "não veio" e "veio nulo" é significativa aqui — `phone: null` **apaga** o
+ * telefone, enquanto não mandar `phone` o deixa como estava.
+ *
+ * É por isso que as checagens lá embaixo são `!== undefined` e não um `??`: um `??`
+ * trataria `null` e ausência como a mesma coisa, e apagar um campo viraria
+ * impossível.
+ *
+ * Atende RF-02. Mais detalhes: PRODUCT.md — INV-02, INV-04.
  */
 @Injectable()
 export class UpdatePatientService {
@@ -55,12 +63,14 @@ export class UpdatePatientService {
     }
 
     if (patient.isAnonymized()) {
-      // 422 e não 404: o recurso existe, e a recusa é de regra de negócio. Aceitar
-      // a edição reintroduziria PII pela porta dos fundos, desfazendo o direito ao
-      // esquecimento que alguém exerceu.
+      // 422 e não 404: o paciente **existe** — a recusa é de regra de negócio, não
+      // de "não achei". Aceitar a edição reintroduziria dado pessoal pela porta dos
+      // fundos, desfazendo o esquecimento que alguém pediu.
       return left(new BusinessRuleViolationError(ANONYMIZED_PATIENT_MESSAGE));
     }
 
+    // Campo a campo, e sempre `!== undefined` — é o que separa "apagar o telefone"
+    // de "não mexer no telefone". Ver a nota no cabeçalho.
     if (changes.name !== undefined) patient.name = changes.name;
     if (changes.phone !== undefined) patient.phone = changes.phone;
     if (changes.email !== undefined) patient.email = changes.email;

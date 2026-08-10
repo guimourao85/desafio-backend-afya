@@ -99,6 +99,62 @@ describe('Appointment — máquina de estados', () => {
     });
   });
 
+  /**
+   * INV-05 mora aqui, e não num service, porque é regra sobre o estado da própria
+   * consulta. O eixo é `isActive()`, não `isTerminal()`: **concluída aceita**
+   * anotação — anota-se depois de atender, que é o caso normal.
+   */
+  describe('addNote — INV-05', () => {
+    it('agendada aceita anotação', () => {
+      const appointment = makeAppointment();
+
+      const result = appointment.addNote('Queixa de dor lombar há três dias.');
+
+      expect(result.isRight()).toBe(true);
+      expect(appointment.notes).toHaveLength(1);
+      expect(appointment.notes?.[0].appointmentId).toBe('appointment-1');
+      expect(appointment.notes?.[0].content).toBe('Queixa de dor lombar há três dias.');
+    });
+
+    it('concluída aceita anotação — anota-se depois de atender', () => {
+      const appointment = makeAppointment(AppointmentStatus.COMPLETED);
+
+      expect(appointment.addNote('Prescrito anti-inflamatório por 5 dias.').isRight()).toBe(true);
+      expect(appointment.notes).toHaveLength(1);
+    });
+
+    it('cancelada recusa, e não deixa rastro na lista', () => {
+      const appointment = makeAppointment(AppointmentStatus.CANCELLED);
+
+      const result = appointment.addNote('não deve entrar');
+
+      expect(result.isLeft()).toBe(true);
+      expect(result.value).toBeInstanceOf(BusinessRuleViolationError);
+      expect((result.value as Error).message).toBe('Consulta cancelada não aceita anotações.');
+      expect(appointment.notes).toBeUndefined();
+    });
+
+    it('acumula anotações na ordem em que foram escritas', () => {
+      const appointment = makeAppointment();
+
+      appointment.addNote('primeira');
+      appointment.addNote('segunda');
+
+      expect(appointment.notes?.map((note) => note.content)).toEqual(['primeira', 'segunda']);
+    });
+
+    // A raiz lida sem `relations` tem `notes` indefinido. Anotar nesse estado não
+    // pode explodir nem — pior — fingir que a consulta não tinha nota nenhuma: o
+    // `cascade` é `['insert']`, então o que não está na lista não é apagado.
+    it('anota numa raiz carregada sem as anotações', () => {
+      const appointment = makeAppointment();
+      appointment.notes = undefined;
+
+      expect(appointment.addNote('nota isolada').isRight()).toBe(true);
+      expect(appointment.notes).toHaveLength(1);
+    });
+  });
+
   describe('predicados', () => {
     it.each([
       [AppointmentStatus.SCHEDULED, true, false],

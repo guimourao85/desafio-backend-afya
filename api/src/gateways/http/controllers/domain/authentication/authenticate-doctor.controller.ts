@@ -7,6 +7,20 @@ import { SessionHttpResponse, SessionPresenter } from '@/presentation/presenters
 
 import { AuthenticateDoctorDto } from '../../../schemas/domain/authentication.schema';
 
+/**
+ * `POST /api/auth/login` — onde a sessão nasce.
+ *
+ * Devolve três coisas: o `accessToken` (curto, 15 minutos, é o que vai no header
+ * de toda outra rota), o `refreshToken` (longo, 8 horas, serve só para pedir um
+ * access novo) e `expiresIn` em segundos.
+ *
+ * Email inexistente e senha errada respondem **exatamente igual** — mesmo status,
+ * mesmo código, mesmo texto. Distinguir os dois transformaria o login num
+ * consultor de "esta pessoa tem conta aqui", e num prontuário isso já é vazamento
+ * de dado sensível antes de qualquer senha ser quebrada.
+ *
+ * Mais detalhes: PRODUCT.md — §regras.
+ */
 @ApiTags('autenticação')
 @Controller('auth')
 export class AuthenticateDoctorController {

@@ -26,12 +26,18 @@ export enum PatientSex {
 export const ANONYMIZED_PATIENT_NAME = 'Paciente anonimizado';
 
 /**
- * O paciente — raiz do próprio agregado, e o primeiro dado de terceiro que este
- * sistema guarda.
+ * O paciente — o primeiro dado de **terceiro** que este sistema guarda, e por isso
+ * o primeiro que a LGPD alcança.
  *
- * Referencia o médico **por ID**, sem `@ManyToOne` (ADR-04): a FK existe no banco,
- * escrita à mão na revisão da migration, porque integridade referencial é decisão de
- * persistência e não precisa de relação navegável para valer.
+ * Aponta para o médico **por id**, sem relação navegável. É deliberado: uma relação
+ * navegável abriria o caminho de puxar médico e pacientes numa consulta só,
+ * atravessando o filtro por consultório que protege a base de todo mundo.
+ *
+ * A chave estrangeira **existe no banco** mesmo assim, escrita à mão na revisão da
+ * migration: garantir que o paciente aponte para um médico real é decisão de
+ * persistência, e não depende de existir relação no modelo.
+ *
+ * Mais detalhes: PRODUCT.md — INV-03, INV-04, ADR-04.
  */
 @Entity({ name: 'patients' })
 // Motivo: performance. **Toda** consulta desta sprint filtra por médico (INV-04) —
@@ -48,7 +54,10 @@ export class Patient {
   @PrimaryGeneratedColumn('uuid', { name: 'id', primaryKeyConstraintName: 'pk_patients' })
   id!: string;
 
-  /** O dono. É por esta coluna que INV-04 filtra — em **todo** método da porta. */
+  /**
+   * O dono. É por esta coluna que **toda** leitura e **toda** escrita do sistema
+   * filtra — sem exceção, inclusive nas de escrita. (INV-04)
+   */
   @Column({ name: 'doctor_id', type: 'uuid' })
   doctorId!: string;
 
@@ -93,7 +102,11 @@ export class Patient {
   })
   weightKg!: number | null;
 
-  /** Nulo enquanto o paciente está ativo. É o carimbo de quando a LGPD foi exercida. */
+  /**
+   * Vazio enquanto o paciente está ativo. Preenchido, é o carimbo de **quando** o
+   * direito ao esquecimento foi exercido — dado de conformidade, e a única forma de
+   * o sistema saber que este cadastro não aceita mais edição nem consulta nova.
+   */
   @Column({ name: 'anonymized_at', type: 'timestamptz', nullable: true })
   anonymizedAt!: Date | null;
 
@@ -108,20 +121,25 @@ export class Patient {
   }
 
   /**
-   * Exerce o direito ao esquecimento (INV-03).
+   * Exerce o direito ao esquecimento.
    *
-   * A regra é sobre o **próprio estado**, então mora aqui: no caso de uso, a entity
-   * viraria um saco de setters e a política de "o que se apaga" se espalharia por
-   * quem chamasse.
+   * **O que some:** nome (vira um rótulo genérico), telefone, email e data de
+   * nascimento — os quatro campos que apontam para uma pessoa específica.
    *
-   * Idempotente por decisão: chamar de novo não reescreve `anonymizedAt`, porque
-   * **quando** o direito foi exercido é o dado de conformidade — e ele não muda
-   * porque alguém repetiu a requisição.
+   * **O que fica:** sexo, altura, peso e **toda a agenda**. Sozinhos, esses três
+   * não identificam ninguém, e são o que resta de valor clínico na linha. Apagar os
+   * agendamentos destruiria a trilha de atendimento — o oposto do que a lei pede
+   * aqui, que é anonimizar a pessoa, não fingir que os atendimentos não ocorreram.
    *
-   * O que **não** se apaga: `sex`, `heightM`, `weightKg` e todo o histórico de
-   * agenda. Sozinhos não identificam ninguém, e são o que resta de valor clínico
-   * na linha. Apagar agendamento seria destruir trilha de atendimento — o oposto
-   * do que a lei pede aqui.
+   * **Repetir é inofensivo:** chamar de novo não reescreve a data. *Quando* o
+   * direito foi exercido é dado de conformidade, e não muda porque a rede repetiu a
+   * requisição.
+   *
+   * A regra mora aqui, na entidade, e não no caso de uso, porque ela é sobre o
+   * próprio estado do paciente. Espalhada por quem chama, a política de "o que se
+   * apaga" precisaria ser lembrada em cada lugar novo.
+   *
+   * Mais detalhes: PRODUCT.md — INV-03.
    */
   anonymize(at: Date): void {
     if (this.isAnonymized()) return;

@@ -15,19 +15,23 @@ export interface AnonymizePatientRequest {
 export type AnonymizePatientResult = Either<ResourceNotFoundError, void>;
 
 /**
- * Exerce o direito ao esquecimento (RF-08).
+ * Exerce o direito ao esquecimento (LGPD) — o "excluir paciente" que não apaga.
  *
- * **`DELETE` que não apaga.** Apagar a linha destruiria a trilha de atendimento e
- * colidiria com o próprio direito que se está exercendo — a LGPD pede que o dado
- * pessoal suma, não que o histórico clínico deixe de existir. O que sai são os
- * campos que identificam; a linha e toda a agenda permanecem (INV-03).
+ * Apagar a linha destruiria a trilha de atendimento e colidiria com o próprio
+ * direito que se está exercendo: a lei pede que o dado **pessoal** suma, não que o
+ * histórico clínico deixe de ter acontecido. Saem os campos que identificam; a
+ * linha e toda a agenda ficam.
  *
- * **Idempotente:** anonimizar de novo responde 204 e não reescreve `anonymized_at`.
- * A regra vive na entity, que sai cedo se já anonimizada — quando o direito foi
- * exercido é dado de conformidade, e não muda porque a rede repetiu a requisição.
+ * **Idempotente:** anonimizar de novo responde 204 e não reescreve a data. Quem
+ * garante isso é a própria entidade, que sai cedo se já estiver anonimizada —
+ * *quando* o direito foi exercido é dado de conformidade, e não muda porque a rede
+ * repetiu a requisição.
  *
- * Este caso de uso **não toca outra tabela**. É o que faz INV-03 ser verdade por
- * construção, e não por promessa: nenhuma linha daqui alcança `appointments`.
+ * O detalhe que mais importa: este caso de uso **não toca nenhuma outra tabela**. É
+ * o que torna "anonimizar preserva o histórico" verdade por construção em vez de
+ * por promessa — não existe linha daqui que alcance a agenda.
+ *
+ * Atende RF-08. Mais detalhes: PRODUCT.md — INV-03.
  */
 @Injectable()
 export class AnonymizePatientService {
@@ -43,8 +47,11 @@ export class AnonymizePatientService {
       return left(new ResourceNotFoundError(PATIENT_NOT_FOUND_MESSAGE));
     }
 
-    // O instante vem de fora da entity: assim o teste controla o relógio sem
-    // precisar de fake timer sobre o módulo inteiro.
+    // O instante entra por parâmetro, em vez de a entidade chamar `new Date()` por
+    // conta própria: assim o teste controla o relógio sem precisar congelar o tempo
+    // do processo inteiro.
+    //
+    // Quem decide o que se apaga e o que se preserva é a entidade, não este método.
     patient.anonymize(new Date());
 
     await this.patientRepository.save(patient, doctorId);

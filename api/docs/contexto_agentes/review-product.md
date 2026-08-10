@@ -78,9 +78,9 @@ Cada endpoint existe por causa de um requisito (`PRODUCT.md §jornadas`,
 
 O Swagger não é enfeite: é como o trabalho será exercitado.
 
-- A rota nova aparece em `/api/docs`, com `@ApiTags` do **módulo certo** (`Auth`, `Pacientes`, `Agendamentos`)?
+- A rota nova aparece em `/api/docs`, com `@ApiTags` do **módulo certo** (`autenticação`, `pacientes`, `agendamentos`, `health` — em PT-BR minúsculo, como o código usa em 17/17 controllers)?
 - Tem `@ApiOperation({ summary })` curto e descrição que explica o caso de uso?
-- Tem `@ApiResponse` com **exemplo de request e de response**, incluindo os erros interessantes (409 de conflito, 422 de anonimizado)?
+- Tem `@ApiResponse` com **exemplo de request e de response**, para **todo** status que a rota pode devolver? A regra é essa — não uma lista fixa de erros "interessantes". O 409 de conflito e o 422 de anonimizado são exemplos, e o **400 de validação** conta igual: toda rota com body ou query pode devolvê-lo, e ele estava documentado em 1 de 17 rotas em 10/08/2026 justamente porque esta linha enumerava em vez de exigir (sprint 05.01 §issues, item 4). Rota que só documenta o caminho feliz é achado **ALTO**.
 - Enums, formatos (`date-time`, `email`) e obrigatoriedade estão visíveis — vindos do **DTO Zod** (`createZodDto` + `patchNestJsSwagger`), sem `@ApiProperty` duplicando o schema? Documentação escrita à mão em paralelo ao Zod é achado **ALTO**: são duas fontes que vão divergir.
 - Dá para executar a rota direto do `/api/docs` depois de clicar em **Authorize**? Rota autenticada sem `addBearerAuth`/`@ApiBearerAuth` é achado **ALTO** — o avaliador toma 401 e conclui que está quebrado.
 
@@ -139,6 +139,7 @@ O QUE ESTÁ CORRETO
 - [ ] Mensagens em PT-BR, sem jargão nem nome de constraint
 - [ ] Comportamento bate com `PRODUCT.md §regras`
 - [ ] Rota no Swagger, na tag certa, com exemplos e `bearerAuth`
+- [ ] **Todo status que a rota devolve está documentado — inclusive o 400 de validação**
 - [ ] Roteiro de 6 passos do avaliador continua funcionando
 - [ ] Nada exige ler o código para ser usado
 <!-- /§checklist -->

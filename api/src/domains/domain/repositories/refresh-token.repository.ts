@@ -13,11 +13,14 @@ export interface CreateRefreshTokenData {
 }
 
 /**
- * A porta de persistência do refresh token.
+ * O contrato de acesso à tabela de sessões.
  *
- * Os três métodos falam em **hash**, nunca em token — o nome do parâmetro é a
- * primeira barreira de INV-06. Quem passar o valor cru aqui não encontra nada, e
- * o conserto intuitivo de quem não conhece a regra seria gravar o cru.
+ * Os três métodos falam em **hash**, nunca em "token". O nome do parâmetro é a
+ * primeira barreira contra gravar o valor em texto puro: quem passar o token cru
+ * aqui simplesmente não encontra nada — e o conserto intuitivo de quem não conhece
+ * a regra seria justamente gravar o cru para "fazer bater".
+ *
+ * Mais detalhes: PRODUCT.md — INV-06.
  */
 export interface RefreshTokenRepository {
   create(data: CreateRefreshTokenData): Promise<void>;

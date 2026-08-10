@@ -187,6 +187,7 @@ quando não pode.
 | Horário já ocupado na agenda do médico       | 409 `SCHEDULE_CONFLICT`       | "Já existe um agendamento neste horário."                          |
 | Agendar paciente anonimizado                 | 422 `BUSINESS_RULE_VIOLATION` | "Paciente anonimizado (LGPD) não pode receber novos agendamentos." |
 | **Editar** paciente anonimizado              | 422 `BUSINESS_RULE_VIOLATION` | "Paciente anonimizado (LGPD) não pode ser editado."                |
+| **Reagendar** consulta de paciente anonimizado | 422 `BUSINESS_RULE_VIOLATION` | "Paciente anonimizado (LGPD) não pode ter consultas reagendadas."  |
 | Campo desconhecido no corpo                  | 400 `VALIDATION_ERROR`        | "Campo desconhecido no corpo da requisição."                       |
 | Anotar em consulta cancelada                 | 422 `BUSINESS_RULE_VIOLATION` | "Consulta cancelada não aceita anotações."                         |
 | Reagendar consulta cancelada ou concluída    | 422 `BUSINESS_RULE_VIOLATION` | "Consulta cancelada ou concluída não pode ser reagendada."          |
@@ -294,24 +295,33 @@ sub-doc de sprint. Esta tabela é a única amarração canônica sprint ↔ fase
 | 02.02  | F2 (2/2)    | Rotas protegidas: `JwtAuthGuard` global, `@Public()`, `@CurrentDoctor()`, `refresh`, `logout`, `me` | [sprint-02.02](desenvolvimento/sprints/sprint-02.02-rotas-protegidas.md)   | ✅     |
 | 03.01  | F3          | `patients`: cadastro, listagem, edição, anonimização LGPD                                           | [sprint-03.01](desenvolvimento/sprints/sprint-03.01-pacientes.md)          | ✅     |
 | 04.01  | F4          | `appointments`: agenda com recusa de conflito, reagendamento, cancelamento                          | [sprint-04.01](desenvolvimento/sprints/sprint-04.01-agenda.md)                                                                          | ✅     |
-| 04.02  | F5          | `appointments`: anotações e linha do tempo do paciente                                              | —                                                                          | ⬜     |
-| 05.01  | F6          | Swagger navegável a partir dos schemas Zod + seed de demonstração                                   | —                                                                          | ⬜     |
-| 05.02  | F7          | README para o avaliador, ER, pipeline de CI                                                         | —                                                                          | ⬜     |
+| 04.02  | F5          | `appointments`: anotações e linha do tempo do paciente                                              | [sprint-04.02](desenvolvimento/sprints/sprint-04.02-anotacoes.md)          | ✅     |
+| 05.01  | F6          | Swagger: 400 e 401 por decorator, seed de demonstração idempotente e gate do documento OpenAPI      | [sprint-05.01](desenvolvimento/sprints/sprint-05.01-swagger-e-seed.md)     | ⬜     |
+| 05.02  | F7          | README para o avaliador e ER — **sem CI** (RNF-12 cortado, `PLAN.md §3.1`)                          | [sprint-05.02](desenvolvimento/sprints/sprint-05.02-readme-e-er.md)        | ⬜     |
 | 06.01  | —           | **Rigor:** teste de concorrência no slot (ADR-09), idempotência (DEBT-05) e carga                   | —                                                                          | ⬜     |
 
 **Legenda:** ⬜ não iniciada · 🟨 em andamento · ✅ verde (`lint` + `build` + `test`).
 
-**A sprint 06.01 não tem fase.** É a única transversal: nasceu de decisão do usuário
-(09/08/2026) para concentrar o que endurece o que já existe, em vez de espalhar teste
-frágil por sprint de feature. A **regra** de INV-01 continua em F4 — o que se
-concentra ali é a **prova sob corrida**, mais idempotência e carga.
+**Uma sprint não tem fase**, e está declarada:
+
+- **06.01** — a transversal de rigor. Decisão do usuário em 09/08/2026, para
+  concentrar o que endurece o que já existe em vez de espalhar teste frágil por
+  sprint de feature. A **regra** de INV-01 continua em F4; o que se concentra ali é a
+  **prova sob corrida**, mais idempotência e carga.
 
 **Numeração:** `NN.MM` — `NN` é a sprint (agrupamento entregável), `MM` é o sub-doc
 dentro dela. Nenhuma fase de `PLAN.md §13` existe fora desta tabela; nenhum sub-doc
 de sprint existe sem linha aqui. Sub-doc criado **antes** de codificar
 ([CLAUDE.md §Documentação](../../CLAUDE.md)).
 
-**Fora do escopo, por decisão:** produção e cloud (ADR-12) · Redis, filas e
+**Acréscimo não previsto** — sprint transversal, registro de sessão, planejamento
+antecipado — ocupa o **próximo `MM` livre da sprint corrente**, com fase `—` e o
+motivo declarado. A numeração já planejada nesta tabela é **reservada**: não se
+desloca, não recebe sub-doc intercalado, e o acréscimo não vira sprint nova. Regra em
+[SPRINT-TEMPLATE.md §nomeacao](SPRINT-TEMPLATE.md).
+
+**Fora do escopo, por decisão:** produção e cloud (ADR-12) · **pipeline de CI
+(RNF-12, cortado em 10/08/2026 — `PLAN.md §3.1`, sem débito)** · Redis, filas e
 eventos de domínio · RBAC com múltiplos papéis (DEBT-08) · frontend.
 
 **Pontos de extensão nomeados** (não implementados, e o motivo está no ledger):

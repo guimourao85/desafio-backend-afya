@@ -4,9 +4,14 @@ import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Public } from '@/framework/authentication/public.decorator';
 
 /**
- * Não sonda o banco de propósito (PLAN.md §13 F0): sondar exigiria injetar o
- * `DataSource` num controller — a dependência que o Apêndice C proíbe. Banco caído
- * é denunciado por `migration:run` e por qualquer rota autenticada.
+ * `GET /api/health` — a API está no ar?
+ *
+ * Responde `{ status: 'ok' }` e nada mais. **Não** consulta o banco, de propósito:
+ * sondar exigiria dar uma conexão de banco a este controller, criando uma
+ * dependência que ele não deveria ter. Banco caído já é denunciado pela migration
+ * e por qualquer rota autenticada.
+ *
+ * Mais detalhes: PLAN.md §13 (F0) · Apêndice C.
  */
 @ApiTags('health')
 @Controller('health')

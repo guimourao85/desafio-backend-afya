@@ -12,13 +12,16 @@ export interface ListPatientsRequest {
 }
 
 /**
- * Lista os pacientes do médico autenticado, com busca por nome (RF-02).
+ * Lista os pacientes do médico autenticado, com busca por nome.
  *
- * Sem `Either`: lista vazia é resultado legítimo, não erro — `{ data: [], total: 0 }`
- * com 200, nunca 404. Página além do fim também devolve vazio, e não estouro.
+ * **Não devolve erro em caso nenhum:** lista vazia é resultado legítimo — 200 com
+ * lista vazia, nunca 404. Pedir uma página além do fim também devolve vazio, em vez
+ * de estourar.
  *
- * O caso de uso não conhece `totalPages`: quantas páginas existem é aritmética de
- * apresentação, e vive no `PaginatedPresenter`. Aqui moram os dados; lá, o formato.
+ * O caso de uso não sabe quantas páginas existem: isso é aritmética de tela, e é
+ * calculado só na hora de montar a resposta. Aqui moram os dados; o formato mora lá.
+ *
+ * Atende RF-02. Mais detalhes: PRODUCT.md — INV-04.
  */
 @Injectable()
 export class ListPatientsService {

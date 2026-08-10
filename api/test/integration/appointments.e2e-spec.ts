@@ -368,6 +368,58 @@ describe('Agendamentos (e2e)', () => {
     });
   });
 
+  /**
+   * O enunciado pede excluir os dados pessoais **mantendo o histórico de consulta**.
+   * As duas metades dessa frase viram duas regras opostas, e as duas são testadas
+   * aqui: não se marca horário novo para quem foi esquecido; registra-se o que já
+   * aconteceu com ele.
+   *
+   * INV-02 lista três operações bloqueadas. Editar e agendar tinham enforcement
+   * desde F3 e F4; **reagendar** só ganhou na sprint 04.02 — até então o documento
+   * descrevia uma regra que o código não cumpria.
+   */
+  describe('INV-02 — paciente com dados pessoais excluídos', () => {
+    it('recusa reagendamento com 422', async () => {
+      const criada = await schedule();
+      await asOwner('delete', `/api/patients/${patientId}`);
+
+      const response = await asOwner('patch', `/api/appointments/${criada.body.id}`).send({
+        scheduledAt: OUTRO_SLOT,
+      });
+
+      expect(response.status).toBe(422);
+      expect(response.body.code).toBe('BUSINESS_RULE_VIOLATION');
+      expect(response.body.message).toBe(
+        'Paciente anonimizado (LGPD) não pode ter consultas reagendadas.',
+      );
+
+      // A consulta não se moveu: recusa não deixa rastro.
+      const persistida = await dataSource.getRepository(Appointment).findOneByOrFail({
+        id: criada.body.id,
+      });
+      expect(persistida.scheduledAt.toISOString()).toBe(SLOT);
+    });
+
+    it('permite concluir a consulta — registrar o atendimento é preservar o histórico', async () => {
+      const criada = await schedule();
+      await asOwner('delete', `/api/patients/${patientId}`);
+
+      const response = await asOwner('patch', `/api/appointments/${criada.body.id}`).send({
+        status: AppointmentStatus.COMPLETED,
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.body.status).toBe('COMPLETED');
+    });
+
+    it('permite cancelar a consulta', async () => {
+      const criada = await schedule();
+      await asOwner('delete', `/api/patients/${patientId}`);
+
+      await asOwner('delete', `/api/appointments/${criada.body.id}`).expect(204);
+    });
+  });
+
   describe('sem autenticação', () => {
     it.each([
       ['get', '/api/appointments'],

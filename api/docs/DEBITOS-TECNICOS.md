@@ -28,10 +28,10 @@
 
 | | ALTO | MÉDIO | BAIXO | Total |
 | --- | --- | --- | --- | --- |
-| **Abertos** | 2 | 7 | 4 | **13** |
-| **Resolvidos** | 0 | 0 | 0 | **0** |
+| **Abertos** | 2 | 8 | 4 | **14** |
+| **Resolvidos** | 1 | 0 | 0 | **1** |
 
-Por área: privacidade 1 · domínio 3 · segurança 5 · arquitetura 3 · performance 1.
+Abertos por área: privacidade 2 · domínio 3 · segurança 5 · arquitetura 3 · performance 1.
 <!-- /§visao-geral -->
 
 ---
@@ -45,6 +45,18 @@ Por área: privacidade 1 · domínio 3 · segurança 5 · arquitetura 3 · perfo
 email, nascimento), mas o conteúdo de `consultation_notes` é texto livre e pode
 conter identificação digitada pelo médico.
 **Por que fica assim:** achar nome de pessoa em texto corrido exige NLP ou curadoria humana — fora do escopo de uma POC, e um "regex de nome" daria falsa sensação de conformidade.
+**E há uma razão mais forte, apurada na sprint 04.02 lendo o enunciado:** ele pede
+*"excluir os dados pessoais do paciente (…) **mantendo o histórico de consulta** por
+questões de contabilidade"*. Apagar ou mascarar o `content` das anotações destruiria
+exatamente o que o requisito manda preservar, e colidiria com INV-03, com a
+imutabilidade da anotação (sprint 04.02, decisão 6) e com o `ON DELETE NO ACTION`
+que existe para impedir que registro clínico desapareça (decisão 15). **Este débito
+não é "trabalho pendente": fechá-lo do jeito óbvio quebraria um requisito.** A
+solução real é de produto — orientar quem digita a não escrever identificação no
+campo livre —, não de código.
+**Por que segue ALTO** mesmo assim: a severidade aqui é sobre *segurança em uso
+real*, não sobre requisito. Numa POC com dado sintético o risco é nulo; com paciente
+de verdade, deixa de ser.
 **Gatilho de reabertura:** qualquer uso com dado real de paciente.
 
 ### DEBT-02 · MÉDIO · domínio
@@ -134,6 +146,21 @@ está gravado dentro dele. Subir `BCRYPT_ROUNDS` para 12 acelera só o caminho
 **Por que fica assim:** gerar o hash no boot com o custo corrente pagaria um bcrypt no start e guardaria estado no service, para um ambiente onde o valor é 10 e não muda. A alternativa de cobrir isso por teste exigiria asserção sobre tempo — a espécie mais frágil que existe.
 **Mitigação em vigor:** comentário no ponto exato do código dizendo que o literal acompanha `BCRYPT_ROUNDS`.
 **Gatilho de reabertura:** `BCRYPT_ROUNDS` deixar de ser 10.
+
+### DEBT-15 · MÉDIO · privacidade
+**A listagem enumera os pacientes anonimizados, e o que sobra na linha ainda aponta para uma pessoa.**
+`GET /api/patients` devolve as linhas anonimizadas junto com as ativas, pelo mesmo
+presenter e com o `id` no payload (`list-patients.controller.ts:72` ·
+`patient.presenter.ts:30`). Pior: `?search=anonimizado` casa com o rótulo
+`"Paciente anonimizado"` e vira um filtro acidental para exatamente esse conjunto.
+Cada linha ainda carrega `sex`, `heightM`, `weightKg`, e a timeline entrega as datas
+de todas as consultas. Numa base de consultório com dezenas de pacientes, essa
+combinação basta para o médico reconhecer de memória quem era quem — o sistema não
+guarda o vínculo, mas serve os atributos que o reconstroem na cabeça de quem já
+conheceu o paciente.
+**Por que fica assim:** decisão do usuário em 10/08/2026, com a alternativa avaliada e recusada. Esconder por padrão (`WHERE anonymized_at IS NULL` + `?includeAnonymized=true`) custa filtro no repositório, parâmetro no schema, linha no Swagger e teste — e tira do Avaliador a prova visual do RF-08, que é ver o registro continuar íntegro na lista depois do `DELETE`. Reduzir os atributos residuais (faixa em vez de valor de altura e peso) mataria o valor clínico que a INV-03 preserva de propósito.
+**Alcance atual:** contido pela INV-04 — quem lê a lista é o dono da base, o mesmo médico que já conhecia o paciente. Não há exposição a terceiro.
+**Gatilho de reabertura:** existir mais de um papel lendo a base (DEBT-08, RBAC) — aí quem enumera pode não ser quem conhecia; ou qualquer uso com dado real de paciente (o mesmo gatilho do DEBT-01); ou a primeira auditoria de conformidade.
 <!-- /§abertos -->
 
 ---
@@ -141,7 +168,29 @@ está gravado dentro dele. Subir `BCRYPT_ROUNDS` para 12 acelera só o caminho
 <!-- §resolvidos -->
 ## Resolvidos
 
-_(vazio — nenhum débito fechado até aqui)_
+### DEBT-14 · ALTO · privacidade
+**INV-02 dizia que paciente anonimizado não pode ter consulta reagendada — e o código deixava.**
+A invariante lista três operações bloqueadas: editar o paciente, agendar e
+**reagendar**. As duas primeiras tinham enforcement desde F3 e F4
+(`UpdatePatientService`, `ScheduleAppointmentService`); a terceira não:
+`UpdateAppointmentService` verificava o estado da *consulta* (terminal ou não) e o
+conflito de horário, e nunca perguntava pelo estado do *paciente*. Um
+`PATCH /api/appointments/:id` com `scheduledAt` movia a consulta de um paciente já
+esquecido, e respondia 200.
+**Nasceu e fechou no mesmo dia (10/08/2026), e o registro fica** porque o furo é
+real e esteve no código entregue desde a F4 — o débito durou horas, o defeito durou
+uma fase inteira.
+**Resolvido em:** sprint 04.02 (F5), decisão 14.
+**Como:** `UpdateAppointmentService` passou a consultar `FindPatientSummaryService` —
+o service público do `PatientsModule`, nunca o repositório dele — antes de checar o
+conflito de horário, e recusa com 422 e o texto de `PRODUCT.md §regras`. A ordem
+importa: 409 num paciente anonimizado mandaria o cliente procurar outro horário para
+um pedido que nenhum horário resolve. **Concluir e cancelar continuam permitidos**,
+porque o enunciado pede excluir os dados pessoais *mantendo o histórico de consulta*
+— registrar o que já aconteceu preserva o histórico; marcar horário novo, não.
+Coberto por 3 specs unitários e 3 e2e, mais a linha nova em `PRODUCT.md §regras`.
+
+---
 
 Formato ao fechar: mover a entrada inteira para cá, acrescentando **Resolvido em:**
 (fase e commit) e **Como:** (a mudança concreta). O número nunca é reaproveitado.

@@ -3,6 +3,11 @@ import {
   AppointmentStatus,
 } from '@/domains/domain/model-entities/appointment.entity';
 
+import {
+  ConsultationNoteHttpResponse,
+  ConsultationNotePresenter,
+} from './consultation-note.presenter';
+
 /** O corpo de toda resposta que devolve um agendamento (PLAN.md §9.2). */
 export interface AppointmentHttpResponse {
   id: string;
@@ -11,6 +16,8 @@ export interface AppointmentHttpResponse {
   scheduledAt: string;
   status: AppointmentStatus;
   createdAt: string;
+  /** Presente só onde as anotações foram lidas — ver a nota da classe. */
+  notes?: ConsultationNoteHttpResponse[];
 }
 
 /**
@@ -23,6 +30,13 @@ export interface AppointmentHttpResponse {
  *
  * `doctorId` fica de fora: o cliente já sabe de quem é a agenda, porque só enxerga
  * a sua.
+ *
+ * **`notes` aparece só quando foi lido.** `undefined` na entity significa "não
+ * carregado"; `[]` significa "carregado e vazio". Publicar `notes: []` no primeiro
+ * caso — que é o da listagem da agenda, onde não há join — diria ao cliente que a
+ * consulta não tem anotação nenhuma, o que pode ser falso. Omitir o campo é a única
+ * resposta honesta para "não perguntamos". Quem quer as anotações tem
+ * `GET /api/appointments/:id` e a linha do tempo, e nessas duas o campo é garantido.
  */
 export class AppointmentPresenter {
   static toHttp(appointment: Appointment): AppointmentHttpResponse {
@@ -32,6 +46,9 @@ export class AppointmentPresenter {
       scheduledAt: appointment.scheduledAt.toISOString(),
       status: appointment.status,
       createdAt: appointment.createdAt.toISOString(),
+      ...(appointment.notes && {
+        notes: appointment.notes.map(ConsultationNotePresenter.toHttp),
+      }),
     };
   }
 }

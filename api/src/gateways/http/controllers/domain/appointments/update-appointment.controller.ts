@@ -18,6 +18,22 @@ import {
 
 import { UpdateAppointmentDto } from '../../../schemas/domain/appointment.schema';
 
+/**
+ * `PATCH /api/appointments/:id` — reagendar e/ou concluir, na mesma requisição.
+ *
+ * Um endpoint só para as duas operações porque é isso que a tela faz: mover o
+ * horário, marcar como atendida, ou as duas de uma vez.
+ *
+ * O paciente **não** muda aqui: trocá-lo reescreveria o histórico de atendimento
+ * de duas pessoas. O caminho é cancelar e agendar de novo — mandar `patientId`
+ * neste corpo responde 400.
+ *
+ * Recusas: 404 (consulta alheia ou inexistente) · 409 (o novo horário já está
+ * ocupado) · 422 (já cancelada ou concluída, ou o paciente teve os dados pessoais
+ * excluídos).
+ *
+ * Mais detalhes: PRODUCT.md — INV-01, INV-02, INV-04.
+ */
 @ApiTags('agendamentos')
 @ApiBearerAuth()
 @Controller('appointments')
@@ -28,7 +44,7 @@ export class UpdateAppointmentController {
   @ApiOperation({
     summary: 'Reagenda e/ou conclui uma consulta',
     description:
-      'Só consulta **agendada** aceita mudança: cancelada e concluída são terminais e respondem 422. O paciente não muda — cancele e agende de novo.',
+      'Só consulta **agendada** aceita mudança: cancelada e concluída são terminais e respondem 422. O paciente não muda — cancele e agende de novo. **Reagendar** exige paciente ativo: quem teve os dados excluídos (LGPD) responde 422. **Concluir** continua permitido, porque registrar o atendimento que aconteceu é preservar o histórico.',
   })
   @ApiOkResponse({
     schema: {
@@ -61,12 +77,32 @@ export class UpdateAppointmentController {
     },
   })
   @ApiUnprocessableEntityResponse({
-    description: 'A consulta está cancelada ou concluída.',
-    schema: {
-      example: {
-        statusCode: 422,
-        code: 'BUSINESS_RULE_VIOLATION',
-        message: 'Consulta cancelada ou concluída não pode ser reagendada.',
+    description:
+      'A consulta está cancelada ou concluída — ou o paciente teve os dados pessoais excluídos (LGPD) e não aceita reagendamento.',
+    // `content`, e não `schema`: no OpenAPI 3 o `examples` é irmão do `schema`
+    // dentro do media type. Aninhado sob `schema`, o documento até sai válido como
+    // JSON e o Swagger UI **não mostra exemplo nenhum** — e o Swagger é a ferramenta
+    // pela qual esta API é avaliada (PLAN.md §14.3).
+    content: {
+      'application/json': {
+        examples: {
+          estadoTerminal: {
+            summary: 'Consulta em estado terminal',
+            value: {
+              statusCode: 422,
+              code: 'BUSINESS_RULE_VIOLATION',
+              message: 'Consulta cancelada ou concluída não pode ser reagendada.',
+            },
+          },
+          pacienteAnonimizado: {
+            summary: 'Paciente com dados excluídos (LGPD)',
+            value: {
+              statusCode: 422,
+              code: 'BUSINESS_RULE_VIOLATION',
+              message: 'Paciente anonimizado (LGPD) não pode ter consultas reagendadas.',
+            },
+          },
+        },
       },
     },
   })
@@ -75,9 +111,12 @@ export class UpdateAppointmentController {
     @Param('id', ParseUUIDPipe) appointmentId: string,
     @Body() body: UpdateAppointmentDto,
   ): Promise<AppointmentHttpResponse> {
+    // O controller não decide se reagenda, se conclui ou se faz as duas: só repassa
+    // o que veio. Quem sabe quais transições de estado existem é a consulta em si.
     const result = await this.updateAppointment.execute({ doctorId, appointmentId, ...body });
 
     if (result.isLeft()) {
+      // `throw` entrega o erro ao filtro global, que traduz para status e mensagem.
       throw result.value;
     }
 

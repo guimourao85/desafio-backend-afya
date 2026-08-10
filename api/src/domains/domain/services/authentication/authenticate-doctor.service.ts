@@ -35,24 +35,39 @@ export type AuthenticateDoctorResult = Either<
 const INVALID_CREDENTIALS_MESSAGE = 'Email ou senha incorretos.';
 
 /**
- * Hash bcrypt descartável, de custo 10, contra o qual se compara quando o email não
- * existe. Não é paranoia: sem ele o caminho "email inexistente" retorna em ~1 ms e o
- * caminho "senha errada" em ~80 ms — e um cronômetro enumera a base de médicos sem
- * acertar uma senha sequer. A mensagem idêntica fecha a porta; isto fecha a janela.
+ * Uma senha falsa, já embaralhada, contra a qual se compara quando o email **não
+ * existe**. Parece código morto e não é — é uma defesa contra um ataque de relógio.
  *
- * O custo gravado aqui (`$2a$10$`) tem de acompanhar `BCRYPT_ROUNDS`: se o ambiente
- * subir para 12, este literal precisa ser regerado, ou a diferença de tempo volta —
- * menor, mas volta.
+ * Sem ela, o caminho "email inexistente" responde em ~1 ms (não há hash para
+ * conferir) e o caminho "senha errada" em ~80 ms (o hash é caro de propósito). A
+ * diferença é visível com um cronômetro, e quem a mede descobre **quais emails têm
+ * conta** sem acertar uma única senha. Num prontuário, a lista de médicos
+ * cadastrados já é informação que não deveria vazar.
+ *
+ * A mensagem idêntica fecha a porta; isto aqui fecha a janela.
+ *
+ * Manutenção: o custo está gravado dentro do próprio valor (`$2a$10$`) e precisa
+ * acompanhar a configuração `BCRYPT_ROUNDS`. Se o ambiente subir para 12, este
+ * literal tem de ser regerado — senão a diferença de tempo volta, menor, mas volta.
  */
 const DUMMY_PASSWORD_HASH = '$2a$10$WZQoOF6zi5q8EVoWhs.eau2A.K3JLL2F4sMajbtU/P53pgsPo3Hju';
 
 const MILLISECONDS_PER_HOUR = 60 * 60 * 1000;
 
 /**
- * Autentica o médico e abre a sessão (PLAN.md §8.2).
+ * Autentica o médico e abre a sessão.
  *
- * Devolve `Either` em vez de lançar: credencial inválida é resultado **esperado** do
- * login, não defeito. Quem chama fica obrigado pelo tipo a tratar o caso.
+ * O que sai daqui: um access token curto (15 minutos, é o que vai no header das
+ * outras rotas) e um refresh longo (8 horas, serve só para pedir um access novo).
+ *
+ * Credencial inválida é devolvida como **resultado**, não lançada como exceção:
+ * senha errada é um desfecho esperado do login, não um defeito do sistema. Quem
+ * chama fica obrigado pelo tipo a tratar o caso, em vez de descobrir na produção.
+ *
+ * As duas defesas contra enumeração de contas vivem neste arquivo: mensagem única
+ * (logo acima) e custo de tempo constante (logo abaixo).
+ *
+ * Mais detalhes: PLAN.md §8.2 · PRODUCT.md — INV-06, §regras.
  */
 @Injectable()
 export class AuthenticateDoctorService {
@@ -69,8 +84,9 @@ export class AuthenticateDoctorService {
   async execute({ email, password }: AuthenticateDoctorRequest): Promise<AuthenticateDoctorResult> {
     const doctor = await this.doctorRepository.findByEmail(email);
 
-    // O bcrypt roda **sempre**, exista o médico ou não. É o que iguala o tempo dos
-    // dois caminhos de falha.
+    // A conferência de senha roda **sempre**, exista o médico ou não. Parece
+    // trabalho jogado fora quando o email não existe, e é justamente o ponto: é o
+    // que faz os dois caminhos de falha demorarem o mesmo tanto.
     const passwordMatches = await this.passwordHasher.compare(
       password,
       doctor?.passwordHash ?? DUMMY_PASSWORD_HASH,
@@ -89,7 +105,9 @@ export class AuthenticateDoctorService {
 
     await this.refreshTokenRepository.create({
       doctorId: doctor.id,
-      // O que vai para o banco é o hash. O valor cru não passa daqui para baixo (INV-06).
+      // O que vai para o banco é a versão embaralhada. O refresh em texto puro só
+      // existe na resposta HTTP e nunca toca uma coluna — se o banco vazar, os
+      // tokens gravados nele não servem para entrar. (INV-06)
       tokenHash: this.tokenIssuer.hashRefreshToken(refreshToken),
       expiresAt: this.refreshTokenExpiresAt(),
     });
