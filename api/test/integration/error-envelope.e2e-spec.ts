@@ -13,9 +13,9 @@ describe('Envelope de erro (e2e)', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
-      // A sonda existe porque F1 ainda não tem rota com corpo, e o contrato de
-      // erro precisa estar provado antes da primeira delas. O `APP_PIPE` que ela
-      // exercita é o global de verdade.
+      // A sonda dá um corpo simples e estável para provar o contrato de erro sem
+      // depender de uma rota de produção. O `APP_PIPE` que ela exercita é o global
+      // de verdade.
       controllers: [ProbeController],
     }).compile();
 

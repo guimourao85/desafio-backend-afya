@@ -4,12 +4,16 @@ import {
   ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOperation,
+  ApiParam,
   ApiTags,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 
 import { CancelAppointmentService } from '@/domains/domain/services/appointments/cancel-appointment.service';
 import { CurrentDoctor } from '@/framework/authentication/current-doctor.decorator';
+
+import { ApiUnauthorizedErrorResponse } from '../../../decorators/api-unauthorized-error.decorator';
+import { ApiValidationErrorResponse } from '../../../decorators/api-validation-error.decorator';
 
 /**
  * `DELETE /api/appointments/:id` — o "excluir" da tela, que na verdade cancela.
@@ -39,7 +43,10 @@ export class CancelAppointmentController {
     description:
       'A linha permanece com status CANCELLED, e o horário volta a aceitar agendamento. Cancelar de novo responde 204; cancelar consulta **concluída** responde 422.',
   })
+  @ApiParam({ name: 'id', format: 'uuid', description: 'Identificador da **consulta**.' })
   @ApiNoContentResponse({ description: 'Cancelada — ou já estava.' })
+  @ApiValidationErrorResponse()
+  @ApiUnauthorizedErrorResponse()
   @ApiNotFoundResponse({
     schema: {
       example: {

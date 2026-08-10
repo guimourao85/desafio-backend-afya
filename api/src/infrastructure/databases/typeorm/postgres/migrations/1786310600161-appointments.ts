@@ -27,9 +27,9 @@ export class Appointments1786310600161 implements MigrationInterface {
     await queryRunner.query(
       `CREATE TABLE "appointments" ("id" uuid NOT NULL DEFAULT gen_random_uuid(), "doctor_id" uuid NOT NULL, "patient_id" uuid NOT NULL, "scheduled_at" TIMESTAMP WITH TIME ZONE NOT NULL, "status" character varying(20) NOT NULL DEFAULT 'SCHEDULED', "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "ck_appointments_status" CHECK (status IN ('SCHEDULED','COMPLETED','CANCELLED')), CONSTRAINT "pk_appointments" PRIMARY KEY ("id"))`,
     );
-    // Motivo: **performance**. Serve ao filtro `?patientId=` desta fase e à linha do
-    // tempo do paciente em F5 — as duas leem do mais recente para trás, e o btree é
-    // varrido ao contrário com o mesmo custo.
+    // Motivo: **performance**. Serve ao filtro `?patientId=` da agenda e à linha do
+    // tempo do paciente — as duas leem por paciente; a linha do tempo lê do mais
+    // recente para trás, e o btree é varrido ao contrário com o mesmo custo.
     await queryRunner.query(
       `CREATE INDEX "idx_appointments_patient" ON "appointments" ("patient_id", "scheduled_at")`,
     );

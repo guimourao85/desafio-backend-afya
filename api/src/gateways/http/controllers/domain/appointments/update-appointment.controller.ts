@@ -1,10 +1,12 @@
 import { Body, Controller, Param, ParseUUIDPipe, Patch } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiBody,
   ApiConflictResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiParam,
   ApiTags,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
@@ -16,6 +18,8 @@ import {
   AppointmentPresenter,
 } from '@/presentation/presenters/appointment.presenter';
 
+import { ApiUnauthorizedErrorResponse } from '../../../decorators/api-unauthorized-error.decorator';
+import { ApiValidationErrorResponse } from '../../../decorators/api-validation-error.decorator';
 import { UpdateAppointmentDto } from '../../../schemas/domain/appointment.schema';
 
 /**
@@ -46,6 +50,25 @@ export class UpdateAppointmentController {
     description:
       'Só consulta **agendada** aceita mudança: cancelada e concluída são terminais e respondem 422. O paciente não muda — cancele e agende de novo. **Reagendar** exige paciente ativo: quem teve os dados excluídos (LGPD) responde 422. **Concluir** continua permitido, porque registrar o atendimento que aconteceu é preservar o histórico.',
   })
+  @ApiParam({ name: 'id', format: 'uuid', description: 'Identificador da **consulta**.' })
+  // Três exemplos porque a rota faz três coisas, e o corpo é o que escolhe qual.
+  @ApiBody({
+    type: UpdateAppointmentDto,
+    examples: {
+      reagendar: {
+        summary: 'Reagendar',
+        value: { scheduledAt: '2027-06-02T09:00:00.000Z' },
+      },
+      concluir: {
+        summary: 'Marcar como atendida',
+        value: { status: 'COMPLETED' },
+      },
+      ambos: {
+        summary: 'Reagendar e concluir na mesma requisição',
+        value: { scheduledAt: '2027-06-02T09:00:00.000Z', status: 'COMPLETED' },
+      },
+    },
+  })
   @ApiOkResponse({
     schema: {
       example: {
@@ -57,6 +80,14 @@ export class UpdateAppointmentController {
       },
     },
   })
+  // `patientId` no corpo cai aqui, e não em 404: o schema é `.strict()`, então
+  // trocar o paciente da consulta é campo desconhecido — recusado na borda.
+  @ApiValidationErrorResponse({
+    details: [
+      { path: 'status', message: 'O único status aceito é COMPLETED. Para cancelar, use DELETE.' },
+    ],
+  })
+  @ApiUnauthorizedErrorResponse()
   @ApiNotFoundResponse({
     schema: {
       example: {

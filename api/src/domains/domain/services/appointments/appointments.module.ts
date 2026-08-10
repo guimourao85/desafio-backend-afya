@@ -40,7 +40,7 @@ import { UpdateAppointmentService } from './update-appointment.service';
     AddConsultationNoteService,
     // Exportado por este módulo, e não pelo `PatientsModule`, mesmo servindo a uma
     // URL de paciente: o dado é do agregado `Appointment`. A rota segue o cliente,
-    // o código segue o agregado (sprint 04.02, decisão 13).
+    // o código segue o agregado.
     GetPatientTimelineService,
   ],
 })

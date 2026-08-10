@@ -4,11 +4,15 @@ import {
   ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOperation,
+  ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
 
 import { AnonymizePatientService } from '@/domains/domain/services/patients/anonymize-patient.service';
 import { CurrentDoctor } from '@/framework/authentication/current-doctor.decorator';
+
+import { ApiUnauthorizedErrorResponse } from '../../../decorators/api-unauthorized-error.decorator';
+import { ApiValidationErrorResponse } from '../../../decorators/api-validation-error.decorator';
 
 /**
  * `DELETE /api/patients/:id` — o "excluir paciente" da tela, que na verdade
@@ -41,7 +45,10 @@ export class AnonymizePatientController {
     description:
       'Apaga nome, telefone, email e nascimento. Sexo, medidas e **toda a agenda** permanecem. Idempotente: anonimizar de novo responde 204 e não reescreve a data.',
   })
+  @ApiParam({ name: 'id', format: 'uuid', description: 'Identificador do **paciente**.' })
   @ApiNoContentResponse({ description: 'Anonimizado — ou já estava.' })
+  @ApiValidationErrorResponse()
+  @ApiUnauthorizedErrorResponse()
   @ApiNotFoundResponse({
     schema: {
       example: {

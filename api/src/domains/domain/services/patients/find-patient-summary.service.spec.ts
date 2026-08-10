@@ -10,9 +10,9 @@ import {
 import { FindPatientSummaryService } from './find-patient-summary.service';
 
 /**
- * A API pública do módulo — a que `AppointmentsModule` vai injetar em F4. Testada
- * agora, sem consumidor, porque é a fronteira do agregado: se ela nascer torta, a
- * saída fácil lá será furar a fronteira.
+ * A API pública do módulo — a que `AppointmentsModule` injeta para consultar o
+ * paciente sem atravessar a fronteira do agregado. Testada aqui, isolada do
+ * consumidor: se ela nascer torta, a saída fácil lá será furar a fronteira.
  */
 describe('FindPatientSummaryService', () => {
   let service: FindPatientSummaryService;

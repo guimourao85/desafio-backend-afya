@@ -70,7 +70,9 @@ export class InMemoryAppointmentRepository implements AppointmentRepository {
    * Mesmo critério do adapter real: **só a nota sem `id`** é gravada, e é ela que
    * ganha identidade e carimbo — como o `RETURNING` do Postgres faria. Um duplo que
    * devolvesse a nota sem `id` faria o presenter passar no teste e quebrar em
-   * produção; um que gravasse a lista inteira esconderia a armadilha da decisão 18.
+   * produção; um que gravasse a lista inteira esconderia a armadilha real: ler a
+   * raiz sem `relations` e persistir com `cascade` desassocia as notas já gravadas,
+   * porque o TypeORM trata a coleção carregada como o estado completo.
    */
   async appendNotes(appointment: Appointment): Promise<Appointment> {
     for (const note of appointment.notes ?? []) {

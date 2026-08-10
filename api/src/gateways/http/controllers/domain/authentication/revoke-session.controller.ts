@@ -1,9 +1,10 @@
 import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
-import { ApiBadRequestResponse, ApiNoContentResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiNoContentResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { RevokeSessionService } from '@/domains/domain/services/authentication/revoke-session.service';
 import { Public } from '@/framework/authentication/public.decorator';
 
+import { ApiValidationErrorResponse } from '../../../decorators/api-validation-error.decorator';
 import { RefreshTokenDto } from '../../../schemas/domain/authentication.schema';
 
 /**
@@ -36,19 +37,23 @@ export class RevokeSessionController {
     description:
       'Responde 204 mesmo com token desconhecido, expirado ou já revogado. O access token corrente **continua válido até expirar** (até 15 minutos): o logout impede a renovação, não a requisição em curso.',
   })
-  @ApiNoContentResponse({ description: 'Sessão encerrada — ou já estava.' })
-  // O 204 vale para o **token**; corpo malformado continua sendo 400. Documentado
-  // porque é a única resposta de logout que surpreende quem leu só o resumo.
-  @ApiBadRequestResponse({
-    description: 'Corpo sem o campo `refreshToken`.',
-    schema: {
-      example: {
-        statusCode: 400,
-        code: 'VALIDATION_ERROR',
-        message: 'Requisição inválida.',
-        details: [{ path: 'refreshToken', message: 'O token de sessão é obrigatório.' }],
+  @ApiBody({
+    type: RefreshTokenDto,
+    examples: {
+      doLogin: {
+        summary: 'Cole o refreshToken devolvido por POST /api/auth/login',
+        value: { refreshToken: 'cole-aqui-o-refreshToken-do-login' },
       },
     },
+  })
+  @ApiNoContentResponse({ description: 'Sessão encerrada — ou já estava.' })
+  // O 204 vale para o **token**; corpo malformado continua sendo 400. O bloco
+  // inline que vivia aqui desde a 02.01 virou o decorator da sprint 05.01: o
+  // envelope é o mesmo das outras catorze rotas, e a `description` guarda o que era
+  // próprio desta — a única resposta de logout que surpreende quem leu só o resumo.
+  @ApiValidationErrorResponse({
+    description: 'Corpo sem o campo `refreshToken`. O 204 tolerante vale para o **token**, não para o payload.',
+    details: [{ path: 'refreshToken', message: 'O token de sessão é obrigatório.' }],
   })
   async handle(@Body() body: RefreshTokenDto): Promise<void> {
     // Sem `if`: o caso de uso não devolve erro esperado, e o 204 é a resposta

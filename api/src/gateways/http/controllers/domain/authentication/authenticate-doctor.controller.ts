@@ -1,10 +1,17 @@
 import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
-import { ApiOperation, ApiTags, ApiOkResponse, ApiUnauthorizedResponse } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
 
 import { AuthenticateDoctorService } from '@/domains/domain/services/authentication/authenticate-doctor.service';
 import { Public } from '@/framework/authentication/public.decorator';
 import { SessionHttpResponse, SessionPresenter } from '@/presentation/presenters/session.presenter';
 
+import { ApiValidationErrorResponse } from '../../../decorators/api-validation-error.decorator';
 import { AuthenticateDoctorDto } from '../../../schemas/domain/authentication.schema';
 
 /**
@@ -32,6 +39,19 @@ export class AuthenticateDoctorController {
   // O `@Post()` do Nest responde 201 por padrão. Login não cria recurso: abre sessão.
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Autentica o médico e abre uma sessão' })
+  // A credencial do seed vem preenchida: é o **primeiro** Execute da avaliação, e
+  // sem exemplo o Swagger UI monta `password: "string"` e devolve 401. A senha é a
+  // mesma do `.env.example`, placeholder de ambiente dev-only — o seed recusa rodar
+  // fora de `APP_ENV=dev`, e a API não tem build de produção (ADR-12).
+  @ApiBody({
+    type: AuthenticateDoctorDto,
+    examples: {
+      seed: {
+        summary: 'Credencial do médico de demonstração (npm run seed)',
+        value: { email: 'medico@prontomed.dev', password: 'prontomed123' },
+      },
+    },
+  })
   @ApiOkResponse({
     schema: {
       example: {
@@ -41,6 +61,10 @@ export class AuthenticateDoctorController {
       },
     },
   })
+  @ApiValidationErrorResponse({ details: [{ path: 'email', message: 'Informe um email válido.' }] })
+  // 401 próprio, e não o decorator de sessão (sprint 05.01, decisão 3): aqui o
+  // `code` é `INVALID_CREDENTIALS` — "sua credencial está errada", não "você não
+  // se identificou". Mesmo status, outro erro.
   @ApiUnauthorizedResponse({
     description: 'Credencial inválida — a resposta é a mesma para email inexistente e senha errada.',
     schema: {

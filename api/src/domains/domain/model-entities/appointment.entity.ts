@@ -23,12 +23,12 @@ export enum AppointmentStatus {
   CANCELLED = 'CANCELLED',
 }
 
-/** Os três textos das recusas de estado, fixados antes de codar (sprint 04.01, decisão 24). */
+/** As recusas da máquina de estados — o texto exato que o cliente recebe no 422. */
 const CANNOT_RESCHEDULE_MESSAGE = 'Consulta cancelada ou concluída não pode ser reagendada.';
 const CANNOT_COMPLETE_MESSAGE = 'Só uma consulta agendada pode ser concluída.';
 const CANNOT_CANCEL_COMPLETED_MESSAGE = 'Consulta já concluída não pode ser cancelada.';
 
-/** INV-05, texto de `PRODUCT.md §regras` (sprint 04.02). */
+/** Consulta cancelada não aceita anotação (INV-05); o porquê vive em `addNote()`. */
 const CANNOT_ANNOTATE_CANCELLED_MESSAGE = 'Consulta cancelada não aceita anotações.';
 
 /**
@@ -49,8 +49,8 @@ const CANNOT_ANNOTATE_CANCELLED_MESSAGE = 'Consulta cancelada não aceita anota�
   unique: true,
   where: `status <> 'CANCELLED'`,
 })
-// Motivo: performance. Serve ao filtro por paciente desta sprint e à linha do tempo
-// de F5 — as duas leem do mais recente para trás. Sem `DESC` porque `IndexOptions`
+// Motivo: performance. Serve ao filtro `?patientId=` da listagem e à linha do tempo
+// do paciente — as duas leem por paciente. Sem `DESC` porque `IndexOptions`
 // não expressa direção por coluna, e o Postgres varre btree para trás com o mesmo
 // custo.
 @Index('idx_appointments_patient', ['patientId', 'scheduledAt'])
@@ -86,7 +86,7 @@ export class Appointment {
   /**
    * As anotações do atendimento.
    *
-   * **Sem `cascade`, deliberadamente** (sprint 04.02, decisão 18). Salvar a raiz e
+   * **Sem `cascade`, deliberadamente.** Salvar a raiz e
    * deixar o TypeORM propagar seria o caminho idiomático e é uma armadilha: ao
    * persistir uma raiz cuja coleção está carregada, ele trata a lista como o estado
    * completo e desassocia o que não estiver nela. Numa raiz lida sem `relations`,
@@ -178,7 +178,7 @@ export class Appointment {
     // `?? []` porque a raiz pode ter sido lida sem `relations`. A lista pode ficar
     // parcial, e isso é seguro **por causa do adapter**: `appendNotes` grava apenas
     // as notas sem identidade. Não confie no `cascade` do TypeORM aqui — ele leria a
-    // lista parcial como o estado completo (decisão 18).
+    // lista parcial como o estado completo.
     this.notes = [...(this.notes ?? []), note];
 
     return right(note);

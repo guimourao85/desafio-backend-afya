@@ -127,7 +127,7 @@ describe('ScheduleAppointmentService', () => {
     expect(result.value).toBeInstanceOf(ResourceNotFoundError);
   });
 
-  // INV-02.
+  // INV-02: paciente anonimizado não aceita novo agendamento.
   it('recusa paciente anonimizado com 422', async () => {
     patients.items.push(
       makePatient({

@@ -63,7 +63,7 @@ describe('Appointment — máquina de estados', () => {
       expect(appointment.status).toBe(AppointmentStatus.CANCELLED);
     });
 
-    // A assimetria que a fricção PRÉ desta sprint resolveu: repetir o cancelamento
+    // A assimetria deliberada do guarda de cancelamento: repetir o cancelamento
     // não destrói informação, então é no-op e não erro.
     it('aceita cancelamento de novo, sem efeito', () => {
       const appointment = makeAppointment(AppointmentStatus.CANCELLED);

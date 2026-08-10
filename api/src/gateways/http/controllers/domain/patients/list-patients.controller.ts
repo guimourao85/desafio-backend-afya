@@ -9,6 +9,8 @@ import {
 } from '@/presentation/presenters/paginated.presenter';
 import { PatientHttpResponse, PatientPresenter } from '@/presentation/presenters/patient.presenter';
 
+import { ApiUnauthorizedErrorResponse } from '../../../decorators/api-unauthorized-error.decorator';
+import { ApiValidationErrorResponse } from '../../../decorators/api-validation-error.decorator';
 import { ListPatientsQueryDto } from '../../../schemas/domain/patient.schema';
 
 /**
@@ -59,6 +61,12 @@ export class ListPatientsController {
       },
     },
   })
+  // A query também passa pelo pipe global: `?perPage=999` é 400, não uma página
+  // gigante — o teto de 100 mora no schema Zod, não numa checagem do controller.
+  @ApiValidationErrorResponse({
+    details: [{ path: 'perPage', message: 'O máximo por página é 100.' }],
+  })
+  @ApiUnauthorizedErrorResponse()
   async handle(
     @CurrentDoctor() doctorId: string,
     @Query() query: ListPatientsQueryDto,

@@ -7,10 +7,10 @@ import { PRONTOMED_POSTGRES_DATA_SOURCE } from '@/shared/constants';
 import { EnvironmentService } from '@/shared/environments/environment.service';
 
 /**
- * Prova a decisão 10 da sprint 01.02: sob `NODE_ENV=test` — que o Jest impõe — o
- * provider seleciona `POSTGRES_DB_TEST`. Sem esta asserção, um e2e de F2 que
- * escrevesse no banco de desenvolvimento passaria verde enquanto destrói o seed de
- * demonstração, e ninguém saberia até o roteiro de F7.
+ * Prova que, sob `NODE_ENV=test` — que o Jest impõe —, o provider seleciona
+ * `POSTGRES_DB_TEST`. Sem esta asserção, um e2e que escrevesse no banco de
+ * desenvolvimento passaria verde enquanto destrói o seed de demonstração, e
+ * ninguém saberia até o roteiro de avaliação do README.
  */
 describe('Conexão de banco (e2e)', () => {
   let app: INestApplication;

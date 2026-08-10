@@ -69,7 +69,7 @@ describe('UpdatePatientService', () => {
     expect(repository.items[0].name).toBe('Paciente do Outro');
   });
 
-  // INV-02.
+  // INV-02: paciente anonimizado não aceita edição.
   it('recusa edição de paciente anonimizado com 422, não com 404', async () => {
     const patient = makePatient({ anonymizedAt: new Date('2026-08-09T12:00:00.000Z') });
     repository.items.push(patient);

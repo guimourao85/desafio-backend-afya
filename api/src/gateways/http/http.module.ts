@@ -57,7 +57,7 @@ import { ZodValidationPipe } from './pipes/zod-validation-pipe';
     // Antes do `GetPatientController` seria indiferente — `:id` do Express não casa
     // com barra, então `/patients/:id` nunca disputa com `/patients/:id/appointments`.
     // Fica aqui por leitura: a linha do tempo é uma rota de paciente, ainda que o
-    // controller viva no pacote de agendamentos (decisão 13).
+    // controller viva no pacote de agendamentos.
     GetPatientTimelineController,
     UpdatePatientController,
     AnonymizePatientController,

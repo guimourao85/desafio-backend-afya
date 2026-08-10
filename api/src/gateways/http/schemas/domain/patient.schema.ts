@@ -70,8 +70,8 @@ const patientFields = {
 /**
  * A mensagem do `.strict()` **precisa** ser declarada: sem argumento, o Zod devolve
  * `"Unrecognized key(s) in object: 'x'"` — inglês e jargão de lib chegando ao
- * cliente, contra ADR-13. Descoberto no teste empírico desta sprint, e o mesmo
- * defeito existia no login desde 02.01.
+ * cliente, contra ADR-13. Descoberto em teste empírico de rota; o mesmo defeito
+ * existia, despercebido, no schema do login.
  */
 const UNKNOWN_FIELD_MESSAGE = 'Campo desconhecido no corpo da requisição.';
 

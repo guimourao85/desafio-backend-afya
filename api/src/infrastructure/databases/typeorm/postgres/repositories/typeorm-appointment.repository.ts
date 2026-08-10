@@ -17,7 +17,7 @@ import {
  *
  * A atomicidade que INV-01 exige não vem de transação, vem do índice único parcial —
  * duas requisições simultâneas chegam ao `INSERT`, e o banco recusa a segunda. A
- * única escrita que abrange mais de uma linha é `saveWithNotes`, e a transação dela
+ * única escrita que abrange mais de uma linha é `appendNotes`, e a transação dela
  * vive aqui, nunca no caso de uso (ADR-04).
  */
 export class TypeOrmAppointmentRepository implements AppointmentRepository {

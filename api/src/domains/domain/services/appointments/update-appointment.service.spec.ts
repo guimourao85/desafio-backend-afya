@@ -149,9 +149,9 @@ describe('UpdateAppointmentService', () => {
   });
 
   /**
-   * INV-02, a terceira operação da lista. As outras duas — editar o paciente e
-   * agendar — já eram cobradas desde F3 e F4; esta ficou sem enforcement até a
-   * sprint 04.02, e o documento descrevia uma regra que o código não cumpria.
+   * INV-02, a terceira operação da lista. Editar o paciente e agendar já recusam
+   * paciente anonimizado; reagendar é a que faltava — sem esta checagem, o
+   * documento descrevia uma regra que o código não cumpria.
    */
   describe('paciente com dados pessoais excluídos (LGPD)', () => {
     beforeEach(() => {

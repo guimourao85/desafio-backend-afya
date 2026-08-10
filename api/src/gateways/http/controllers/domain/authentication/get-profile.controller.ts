@@ -1,9 +1,11 @@
 import { Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { GetProfileService } from '@/domains/domain/services/authentication/get-profile.service';
 import { CurrentDoctor } from '@/framework/authentication/current-doctor.decorator';
 import { DoctorHttpResponse, DoctorPresenter } from '@/presentation/presenters/doctor.presenter';
+
+import { ApiUnauthorizedErrorResponse } from '../../../decorators/api-unauthorized-error.decorator';
 
 /**
  * `GET /api/auth/me` — quem sou eu.
@@ -38,16 +40,10 @@ export class GetProfileController {
       },
     },
   })
-  @ApiUnauthorizedResponse({
-    description: 'Sem token, token expirado, malformado ou assinado com outro segredo.',
-    schema: {
-      example: {
-        statusCode: 401,
-        code: 'UNAUTHENTICATED',
-        message: 'Autenticação necessária.',
-      },
-    },
-  })
+  // Este bloco era inline — foi a primeira rota autenticada da API e documentou o
+  // 401 sozinha. Virou decorator na sprint 05.01: o mesmo erro aparecia em treze
+  // rotas e estava escrito em uma.
+  @ApiUnauthorizedErrorResponse()
   async handle(@CurrentDoctor() doctorId: string): Promise<DoctorHttpResponse> {
     // `doctorId` vem do token, nunca da rota ou do corpo — é o que INV-04 exige, e
     // o motivo de não existir `GET /auth/:id`.

@@ -1,6 +1,7 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiBody,
   ApiConflictResponse,
   ApiCreatedResponse,
   ApiNotFoundResponse,
@@ -16,6 +17,8 @@ import {
   AppointmentPresenter,
 } from '@/presentation/presenters/appointment.presenter';
 
+import { ApiUnauthorizedErrorResponse } from '../../../decorators/api-unauthorized-error.decorator';
+import { ApiValidationErrorResponse } from '../../../decorators/api-validation-error.decorator';
 import { ScheduleAppointmentDto } from '../../../schemas/domain/appointment.schema';
 
 /**
@@ -43,6 +46,29 @@ export class ScheduleAppointmentController {
     description:
       'Recusa com **409** se já houver consulta não cancelada do mesmo médico no mesmo instante. Cancelar libera o horário de volta.',
   })
+  // O segundo exemplo é o **roteiro do 409**: aquele instante é exatamente o da
+  // consulta que o seed deixa agendada, então executá-lo com o `patientId` de
+  // qualquer paciente demonstra INV-01 sem preparar nada. `patientId` continua sendo
+  // colado à mão — ele nasce no banco, e um id fixo aqui seria mentira.
+  @ApiBody({
+    type: ScheduleAppointmentDto,
+    examples: {
+      horarioLivre: {
+        summary: 'Horário livre — 201',
+        value: {
+          patientId: 'cole-o-id-de-GET-/api/patients',
+          scheduledAt: '2027-06-01T13:00:00.000Z',
+        },
+      },
+      horarioOcupado: {
+        summary: 'Mesmo instante da consulta do seed — 409 (INV-01)',
+        value: {
+          patientId: 'cole-o-id-de-GET-/api/patients',
+          scheduledAt: '2027-05-15T14:00:00.000Z',
+        },
+      },
+    },
+  })
   @ApiCreatedResponse({
     schema: {
       example: {
@@ -54,6 +80,16 @@ export class ScheduleAppointmentController {
       },
     },
   })
+  @ApiValidationErrorResponse({
+    details: [
+      { path: 'patientId', message: 'Informe um identificador de paciente válido.' },
+      {
+        path: 'scheduledAt',
+        message: 'Informe um instante ISO-8601 (ex.: 2026-08-12T14:00:00.000Z).',
+      },
+    ],
+  })
+  @ApiUnauthorizedErrorResponse()
   @ApiNotFoundResponse({
     description: 'Paciente inexistente — ou de outro médico.',
     schema: {

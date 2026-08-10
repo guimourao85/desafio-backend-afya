@@ -77,6 +77,11 @@ fechamento de fase (`PLAN.md §13`) · mudança em invariante.
 
 ### Determinismo em teste de concorrência
 
+> **Quando cobrar.** Prova sob corrida, volume e retry é da **sprint 06.01**, por
+> regra de escopo em [PLAN.md §3.2](../PLAN.md). Fora dela, a ausência **não é
+> achado** — ver §verifica, anti-falso-positivo. As exigências abaixo valem quando o
+> teste existe: na 06.01, ou em qualquer sprint que decida entregá-lo.
+
 O teste de duas requisições simultâneas no mesmo slot (ADR-09) exige:
 - pool com **≥2 conexões** — senão o driver serializa e o teste prova o oposto do pretendido;
 - asserção sobre o **conjunto** dos resultados (`[201, 409]` em qualquer ordem), nunca sobre qual chegou primeiro;
@@ -92,9 +97,13 @@ O teste de duas requisições simultâneas no mesmo slot (ADR-09) exige:
 
 Para a fase em revisão, cada invariante tocada tem teste nomeado?
 
+> **Fonte única da lista: [PLAN.md §12.4](../PLAN.md).** A tabela abaixo é o mesmo
+> fato recortado por invariante, para uso em revisão. Divergiu? **`§12.4` vence**, e
+> quem se corrige é esta tabela.
+
 | Invariante | Teste que a prova |
 | --- | --- |
-| INV-01 | mesmo slot → 409 · outro médico → 201 · cancelado libera · reagendar para ocupado → 409 · **duas requisições concorrentes → um 201 e um 409** |
+| INV-01 | mesmo slot → 409 · outro médico → 201 · cancelado libera · reagendar para ocupado → 409 · *(duas requisições concorrentes → um 201 e um 409 — **só na 06.01**, `PLAN.md §3.2`; não cobre fora dela)* |
 | INV-02 | anonimizado: agendar → 422 · editar → 422 |
 | INV-03 | anonimizar preserva a contagem de consultas e anotações |
 | INV-04 | recurso de outro médico → 404 (não 403), em toda rota com `:id` |
@@ -138,7 +147,7 @@ enquanto a API cresce para dezessete. Verde sem cobertura é o pior estado poss�
 
 - Ausência de meta percentual de cobertura: decisão do projeto (a lista de casos obrigatórios é o gate).
 - Ausência de teste para getter trivial, presenter simples ou mapper sem regra.
-- Ausência de teste de carga ou performance: fora de escopo.
+- **Ausência de prova sob corrida, volume ou retry, fora da sprint 06.01: não é achado.** Teste de concorrência, de carga e de idempotência sob retry são da sprint dedicada, por regra de escopo em [PLAN.md §3.2](../PLAN.md). Sprint de feature entrega a regra e o teste determinístico; cobrar dela a prova sob estresse é cobrar o que o projeto decidiu concentrar em outro lugar. **Vale inclusive para INV-01**, cujo índice único parcial já está no banco desde F4.
 - Duplicação de setup entre testes de integração: legibilidade vale mais que DRY em teste.
 <!-- /§verifica -->
 
@@ -178,7 +187,7 @@ Invariante da fase sem teste → **REPROVADO**, independentemente do resto.
 - [ ] Caminho de erro testado, não só o feliz
 - [ ] Nenhum `sleep`, nenhuma dependência de ordem, nenhuma data incontrolada
 - [ ] Nenhum mock de TypeORM em teste unitário
-- [ ] Teste de concorrência com pool ≥2 e asserção sobre conjunto
+- [ ] *(só quando a sprint entrega prova sob estresse — 06.01, `PLAN.md §3.2`)* Teste de concorrência com pool ≥2 e asserção sobre conjunto
 - [ ] Integração usa `prontomed_test` e limpa estado em `beforeEach`
 - [ ] Asserções específicas (status exato, campo exato), não frouxas
 - [ ] Nomes descrevem comportamento

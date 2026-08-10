@@ -4,6 +4,7 @@ import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiParam,
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
@@ -19,11 +20,13 @@ import {
   PatientTimelinePresenter,
 } from '@/presentation/presenters/patient-timeline.presenter';
 
+import { ApiUnauthorizedErrorResponse } from '../../../decorators/api-unauthorized-error.decorator';
+import { ApiValidationErrorResponse } from '../../../decorators/api-validation-error.decorator';
 import { PatientTimelineQueryDto } from '../../../schemas/domain/appointment.schema';
 
 /**
- * O arquivo mora em `controllers/domain/appointments/` e a rota é `/patients`
- * (sprint 04.02, decisão 13): **o código segue o agregado, a URL segue o cliente**.
+ * O arquivo mora em `controllers/domain/appointments/` e a rota é `/patients`:
+ * **o código segue o agregado, a URL segue o cliente**.
  * O dado é do `Appointment`; quem consome pensa "as consultas deste paciente". Pôr o
  * arquivo em `controllers/domain/patients/` faria o pacote de pacientes injetar um
  * service de agenda, invertendo a fronteira que `PRODUCT.md §dominios` desenha.
@@ -39,6 +42,13 @@ export class GetPatientTimelineController {
     summary: 'Linha do tempo do paciente: consultas com suas anotações',
     description:
       'Uma chamada devolve a história inteira — consultas do mais recente para trás, cada uma com as anotações na ordem em que foram escritas. **Canceladas aparecem**, com o `status`: histórico é registro, e esconder o cancelamento seria reescrevê-lo. Paciente anonimizado **mantém** a história (INV-03) — o esquecimento apaga a identidade, não o atendimento.',
+  })
+  // O `:id` é do **paciente**, embora a rota devolva consultas: é a assimetria que
+  // o decorator existe para explicitar (sprint 05.01, decisão 10).
+  @ApiParam({
+    name: 'id',
+    format: 'uuid',
+    description: 'Identificador do **paciente** cuja história será lida.',
   })
   @ApiQuery({ name: 'page', required: false, example: 1 })
   @ApiQuery({ name: 'perPage', required: false, example: 20, description: 'Máximo 100.' })
@@ -70,6 +80,10 @@ export class GetPatientTimelineController {
       },
     },
   })
+  @ApiValidationErrorResponse({
+    details: [{ path: 'page', message: 'A página deve ser maior que zero.' }],
+  })
+  @ApiUnauthorizedErrorResponse()
   @ApiNotFoundResponse({
     description: 'Paciente inexistente — ou de outro médico.',
     schema: {

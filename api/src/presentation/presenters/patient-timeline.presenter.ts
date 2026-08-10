@@ -30,8 +30,8 @@ export interface PatientTimelineItemHttpResponse {
  * omitir o campo seria pior: o cliente leria "sem anotações" onde a verdade é "não
  * perguntamos".
  *
- * **Consultas canceladas entram** (decisão 12), com o `status` no payload: o
- * histórico é registro contábil, e esconder a cancelada seria reescrevê-lo.
+ * **Consultas canceladas entram**, com o `status` no payload: o histórico é
+ * registro contábil, e esconder a cancelada seria reescrevê-lo.
  */
 export class PatientTimelinePresenter {
   static toHttp(appointment: Appointment): PatientTimelineItemHttpResponse {

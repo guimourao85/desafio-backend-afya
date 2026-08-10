@@ -1,8 +1,8 @@
 import { DomainError } from './domain-error';
 
 /**
- * O catálogo de PLAN.md §9.4 inteiro, nascido em F1 mesmo sem quem o lance: mudar
- * o contrato de erro com oito rotas no ar é mexer em tudo.
+ * O catálogo de PLAN.md §9.4 inteiro, nascido antes de existir quem lançasse cada
+ * código: mudar o contrato de erro com a API inteira no ar é mexer em tudo.
  *
  * `VALIDATION_ERROR` e `INTERNAL_ERROR` não têm classe — o filtro os produz
  * direto, e ninguém os lança.

@@ -28,9 +28,8 @@ describe('HealthController (e2e)', () => {
     expect(response.body).toEqual({ status: 'ok' });
   });
 
-  // Detector do prefixo global. A partir de 02.01 vira também o detector do
-  // `APP_GUARD`: quando o guard global entrar, o teste acima cai de 200 para 401
-  // se o health não receber `@Public()`.
+  // Detector do prefixo global — e também do `APP_GUARD`: o teste acima cairia de
+  // 200 para 401 se o health perdesse o `@Public()`.
   it('GET /health (sem o prefixo global) devolve 404', async () => {
     await request(app.getHttpServer()).get('/health').expect(404);
   });

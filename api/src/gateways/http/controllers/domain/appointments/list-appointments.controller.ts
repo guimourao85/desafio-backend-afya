@@ -12,6 +12,8 @@ import {
   PaginatedPresenter,
 } from '@/presentation/presenters/paginated.presenter';
 
+import { ApiUnauthorizedErrorResponse } from '../../../decorators/api-unauthorized-error.decorator';
+import { ApiValidationErrorResponse } from '../../../decorators/api-validation-error.decorator';
 import { ListAppointmentsQueryDto } from '../../../schemas/domain/appointment.schema';
 
 /**
@@ -60,6 +62,12 @@ export class ListAppointmentsController {
       },
     },
   })
+  // Período invertido é 400, não lista vazia: o `path` aponta `from` porque é lá que
+  // o `refine` do schema pendura a mensagem.
+  @ApiValidationErrorResponse({
+    details: [{ path: 'from', message: 'O início do período não pode ser depois do fim.' }],
+  })
+  @ApiUnauthorizedErrorResponse()
   async handle(
     @CurrentDoctor() doctorId: string,
     @Query() query: ListAppointmentsQueryDto,

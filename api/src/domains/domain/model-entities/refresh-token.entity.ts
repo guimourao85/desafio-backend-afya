@@ -17,7 +17,7 @@ import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn, Unique
  */
 @Entity({ name: 'refresh_tokens' })
 @Unique('uk_refresh_tokens_hash', ['tokenHash'])
-// Serve à busca por médico em 02.02 (`revokeByDoctor`), que sem índice varreria a tabela.
+// Serve à busca por médico do logout (`revokeByDoctor`), que sem índice varreria a tabela.
 @Index('idx_refresh_tokens_doctor', ['doctorId'])
 export class RefreshToken {
   @PrimaryGeneratedColumn('uuid', { name: 'id', primaryKeyConstraintName: 'pk_refresh_tokens' })

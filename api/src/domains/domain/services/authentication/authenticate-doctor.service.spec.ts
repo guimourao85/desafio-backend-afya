@@ -264,7 +264,10 @@ describe('AuthenticateDoctorService', () => {
       expect(comEmailInexistente.value.message).toBe(comSenhaErrada.value.message);
     });
 
-    // Decisão 14: a mensagem igual fecha a porta; o custo igual fecha a janela.
+    // Comparar contra um hash descartável quando o email não existe: sem isso esse
+    // caminho pula o bcrypt e responde bem mais rápido que o de senha errada,
+    // abrindo enumeração por cronômetro. A mensagem igual fecha a porta; o custo
+    // igual fecha a janela.
     it('paga o custo do hash mesmo quando o email não existe — anti-enumeração por cronômetro', async () => {
       const compare = jest.spyOn(passwordHasher, 'compare');
 

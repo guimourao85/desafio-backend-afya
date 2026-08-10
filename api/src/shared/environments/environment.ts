@@ -1,9 +1,10 @@
 import { z } from 'zod';
 
 /**
- * O contrato de ambiente inteiro (PLAN.md Apêndice F), validado no boot desde F0 —
- * inclusive o que só F2 e F6 consomem. Custa exigir variável antes da hora; evita
- * três edições futuras deste arquivo e três chances de subir com `undefined`.
+ * O contrato de ambiente inteiro (PLAN.md Apêndice F), validado no boot de uma vez
+ * só — inclusive o que só autenticação e o seed de demonstração consomem. Custa
+ * exigir variável antes da hora; evita reabrir este arquivo a cada novo consumidor
+ * e a chance de subir com `undefined`.
  */
 export const environmentSchema = z.object({
   // Duas variáveis, de propósito (padrão da referência técnica).
@@ -16,7 +17,7 @@ export const environmentSchema = z.object({
 
   // APP_ENV é o ambiente do *projeto*, e este é nosso. Na prática só `dev` é
   // construído (ADR-12); `hmg`/`prod` existem para o dia em que houver. É a chave
-  // certa para trava fail-closed (ex.: seed de F6 só roda em `dev`).
+  // certa para trava fail-closed (ex.: o seed de demonstração só roda em `dev`).
   // Nome em inglês por ADR-13 — a referência chama de `AMBIENTE`, mas ela é um
   // projeto PT-BR. Os valores ficam como estão: são vocabulário de domínio.
   APP_ENV: z.enum(['dev', 'hmg', 'prod']).default('dev'),

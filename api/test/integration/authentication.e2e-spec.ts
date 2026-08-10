@@ -201,8 +201,8 @@ describe('Autenticação (e2e)', () => {
   });
 
   describe('integridade no banco', () => {
-    // Edge case 6: prova que a FK acrescentada à mão na revisão da migration está
-    // mesmo lá. Sem esta asserção, apagá-la da migration não quebraria teste nenhum.
+    // Prova que a FK acrescentada à mão na revisão da migration está mesmo lá — sem
+    // esta asserção, apagá-la da migration não quebraria teste nenhum.
     it('recusa refresh token apontando para um médico inexistente', async () => {
       const orfao = dataSource.getRepository(RefreshToken).create({
         doctorId: '00000000-0000-0000-0000-000000000000',
@@ -217,7 +217,7 @@ describe('Autenticação (e2e)', () => {
     });
   });
 
-  /** Abre uma sessão de verdade — é o insumo de todo caso de 02.02. */
+  /** Abre uma sessão de verdade — é o insumo de todo teste que depende de sessão autenticada. */
   async function login(): Promise<{ accessToken: string; refreshToken: string }> {
     const response = await request(app.getHttpServer())
       .post('/api/auth/login')

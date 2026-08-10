@@ -48,8 +48,10 @@ export class TypeOrmPatientRepository implements PatientRepository {
       .where('patient.doctorId = :doctorId', { doctorId });
 
     if (search) {
-      // `ILIKE` para ignorar caixa. Acento **não** é ignorado — limite declarado na
-      // sprint: `unaccent` exigiria extensão e índice para uma base de dezenas.
+      // `ILIKE` para ignorar caixa. Acento **não** é ignorado, de propósito:
+      // `unaccent`/`pg_trgm` seriam índice de texto para uma base de dezenas de
+      // pacientes — carga que não existe. Buscar por email/telefone também não está
+      // em requisito nenhum.
       query.andWhere('patient.name ILIKE :search', { search: `%${search}%` });
     }
 

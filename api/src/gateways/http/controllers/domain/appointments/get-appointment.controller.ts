@@ -4,6 +4,7 @@ import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
 
@@ -13,6 +14,9 @@ import {
   AppointmentHttpResponse,
   AppointmentPresenter,
 } from '@/presentation/presenters/appointment.presenter';
+
+import { ApiUnauthorizedErrorResponse } from '../../../decorators/api-unauthorized-error.decorator';
+import { ApiValidationErrorResponse } from '../../../decorators/api-validation-error.decorator';
 
 /**
  * `GET /api/appointments/:id` — abre uma consulta específica.
@@ -35,6 +39,7 @@ export class GetAppointmentController {
     summary: 'Consulta um agendamento',
     description: 'Agendamento de outro médico responde **404**, igual ao inexistente.',
   })
+  @ApiParam({ name: 'id', format: 'uuid', description: 'Identificador da **consulta**.' })
   @ApiOkResponse({
     schema: {
       example: {
@@ -46,6 +51,8 @@ export class GetAppointmentController {
       },
     },
   })
+  @ApiValidationErrorResponse()
+  @ApiUnauthorizedErrorResponse()
   @ApiNotFoundResponse({
     schema: {
       example: {

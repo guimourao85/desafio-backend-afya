@@ -1,10 +1,12 @@
 import { Body, Controller, Post } from '@nestjs/common';
-import { ApiBearerAuth, ApiCreatedResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { RegisterPatientService } from '@/domains/domain/services/patients/register-patient.service';
 import { CurrentDoctor } from '@/framework/authentication/current-doctor.decorator';
 import { PatientHttpResponse, PatientPresenter } from '@/presentation/presenters/patient.presenter';
 
+import { ApiUnauthorizedErrorResponse } from '../../../decorators/api-unauthorized-error.decorator';
+import { ApiValidationErrorResponse } from '../../../decorators/api-validation-error.decorator';
 import { RegisterPatientDto } from '../../../schemas/domain/patient.schema';
 
 /**
@@ -34,6 +36,37 @@ export class RegisterPatientController {
     summary: 'Cadastra um paciente na base do médico autenticado',
     description: 'Só o nome é obrigatório. O paciente nasce vinculado ao médico do token.',
   })
+  /**
+   * **O exemplo existe para o botão Execute funcionar de primeira.** Sem ele o
+   * Swagger UI monta o corpo a partir do schema e produz `birthDate: "8063-81-66"`
+   * — casa com o `pattern` de `AAAA-MM-DD` e não é uma data —, então o primeiro
+   * `POST` que o avaliador executa depois de autenticar responde 400. Verificado no
+   * browser em 10/08/2026.
+   *
+   * `type` junto com `examples`: o schema continua saindo do Zod (ADR-07), e o que
+   * se acrescenta é só o payload de exemplo. Nenhum `@ApiProperty` no DTO.
+   */
+  @ApiBody({
+    type: RegisterPatientDto,
+    examples: {
+      completo: {
+        summary: 'Ficha completa',
+        value: {
+          name: 'Marina Duarte',
+          phone: '(11) 90000-0004',
+          email: 'marina@example.com',
+          birthDate: '1990-04-18',
+          sex: 'FEMALE',
+          heightM: 1.62,
+          weightKg: 58.5,
+        },
+      },
+      minimo: {
+        summary: 'Só o nome — o resto entra depois',
+        value: { name: 'Marina Duarte' },
+      },
+    },
+  })
   @ApiCreatedResponse({
     schema: {
       example: {
@@ -50,6 +83,10 @@ export class RegisterPatientController {
       },
     },
   })
+  @ApiValidationErrorResponse({
+    details: [{ path: 'name', message: 'O nome é obrigatório.' }],
+  })
+  @ApiUnauthorizedErrorResponse()
   async handle(
     @CurrentDoctor() doctorId: string,
     @Body() body: RegisterPatientDto,

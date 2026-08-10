@@ -23,11 +23,11 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * `@ManyToOne`, porque a nota é entidade *interna* do agregado: navegar dentro de um
  * agregado é permitido, é entre agregados que ADR-04 proíbe.
  *
- * `ON DELETE NO ACTION` é explícito de propósito (sprint 04.02, decisão 15): apagar
+ * `ON DELETE NO ACTION` é explícito de propósito: apagar
  * fisicamente uma consulta que tem anotação **deve** falhar. `CASCADE` daria a um
  * `DELETE` manual o poder de sumir com registro clínico.
  *
- * Sem coluna `doctor_id` (decisão 9): o escopo por médico vem da raiz, e uma segunda
+ * Sem coluna `doctor_id`, de propósito: o escopo por médico vem da raiz, e uma segunda
  * cópia dele aqui poderia divergir e apontar para outro consultório.
  *
  * Forward-only: uma vez aplicada, este arquivo não se edita.

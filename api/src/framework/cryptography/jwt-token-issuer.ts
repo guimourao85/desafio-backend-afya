@@ -41,7 +41,7 @@ export class JwtTokenIssuer implements TokenIssuer {
   /**
    * SHA-256 sem sal e sem custo, de propósito: o refresh já é um segredo aleatório
    * de 256 bits — não há dicionário para atacar, e o hash precisa ser determinístico
-   * para a busca por `token_hash` de 02.02 encontrar a linha em uma consulta.
+   * para a busca por `token_hash` do refresh encontrar a linha em uma consulta.
    * Bcrypt aqui inviabilizaria o lookup.
    */
   hashRefreshToken(token: string): string {

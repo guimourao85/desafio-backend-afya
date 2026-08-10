@@ -17,7 +17,7 @@ export const databaseProviders = [
     inject: [EnvironmentService],
     useFactory: async (environment: EnvironmentService): Promise<DataSource> => {
       // O e2e sobe o `AppModule` inteiro; sem esta seleção ele escreveria no banco
-      // de desenvolvimento e destruiria o seed de demonstração de F6.
+      // de desenvolvimento e destruiria o seed de demonstração.
       const database =
         environment.nodeEnv === 'test'
           ? environment.get('POSTGRES_DB_TEST')

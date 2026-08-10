@@ -14,8 +14,9 @@ const port = process.env.POSTGRES_PORT ? Number(process.env.POSTGRES_PORT) : 543
 
 // Mesmo eixo que o `database.providers.ts` usa dentro do Nest: `NODE_ENV=test`
 // aponta para o banco de teste. Sem isto o `migration:run` só alcançaria o banco
-// de desenvolvimento, e o e2e de F2 quebraria com `relation does not exist` — uma
-// falha diferida, a pior espécie. O script `migration:run:test` é quem liga o eixo.
+// de desenvolvimento, e o e2e de autenticação — que grava e lê `doctors` — quebraria
+// com `relation does not exist`: uma falha diferida, a pior espécie. O script
+// `migration:run:test` é quem liga o eixo.
 const database =
   process.env.NODE_ENV === 'test' ? process.env.POSTGRES_DB_TEST : process.env.POSTGRES_DB;
 

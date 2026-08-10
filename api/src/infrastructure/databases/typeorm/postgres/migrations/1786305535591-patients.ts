@@ -12,7 +12,8 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  *
  * Ele compara o schema real com as entities e conclui que aquela FK é sobra — ela
  * existe no banco mas não aparece em decorator nenhum, porque agregados se
- * referenciam por ID (ADR-04) e a FK entrou à mão na migration de 02.01. A linha foi
+ * referenciam por ID (ADR-04) e a FK entrou à mão na migration de autenticação
+ * (`1786106607670-authentication.ts`). A linha foi
  * **removida** daqui, junto do `ADD CONSTRAINT` correspondente no `down()`.
  *
  * Consequência permanente, registrada em `PLAN.md §16.4`: **toda** migration gerada

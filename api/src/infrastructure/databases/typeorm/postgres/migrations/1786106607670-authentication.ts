@@ -25,9 +25,9 @@ export class Authentication1786106607670 implements MigrationInterface {
       `CREATE TABLE "refresh_tokens" ("id" uuid NOT NULL DEFAULT gen_random_uuid(), "doctor_id" uuid NOT NULL, "token_hash" character(64) NOT NULL, "expires_at" TIMESTAMP WITH TIME ZONE NOT NULL, "revoked_at" TIMESTAMP WITH TIME ZONE, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "uk_refresh_tokens_hash" UNIQUE ("token_hash"), CONSTRAINT "pk_refresh_tokens" PRIMARY KEY ("id"))`,
     );
     // Motivo do índice (`review-database.md §regras`/Índices): **performance**. Serve
-    // à revogação em massa por médico do logout de 02.02 — sem ele, cada logout
-    // varre a tabela inteira de sessões. Não é índice "por precaução": a consulta
-    // que o usa está especificada.
+    // à revogação em massa por médico no logout — sem ele, cada logout varre a
+    // tabela inteira de sessões. Não é índice "por precaução": a consulta que o usa
+    // está especificada.
     await queryRunner.query(
       `CREATE INDEX "idx_refresh_tokens_doctor" ON "refresh_tokens" ("doctor_id")`,
     );

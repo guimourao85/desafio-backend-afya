@@ -354,7 +354,7 @@ describe('Pacientes (e2e)', () => {
       expect(detalhe.body.name).toBe(ANONYMIZED_PATIENT_NAME);
     });
 
-    // INV-02.
+    // INV-02: paciente anonimizado não aceita edição.
     it('recusa edição depois de anonimizado, com 422', async () => {
       const patient = await seedPatient(ownerId);
       await asOwner('delete', `/api/patients/${patient.id}`);

@@ -1,9 +1,19 @@
 import { Controller, Get, Param, ParseUUIDPipe } from '@nestjs/common';
-import { ApiBearerAuth, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+  ApiTags,
+} from '@nestjs/swagger';
 
 import { GetPatientService } from '@/domains/domain/services/patients/get-patient.service';
 import { CurrentDoctor } from '@/framework/authentication/current-doctor.decorator';
 import { PatientHttpResponse, PatientPresenter } from '@/presentation/presenters/patient.presenter';
+
+import { ApiUnauthorizedErrorResponse } from '../../../decorators/api-unauthorized-error.decorator';
+import { ApiValidationErrorResponse } from '../../../decorators/api-validation-error.decorator';
 
 /**
  * `GET /api/patients/:id` — abre a ficha de um paciente.
@@ -27,6 +37,7 @@ export class GetPatientController {
     description:
       'Paciente de outro médico responde **404**, igual ao inexistente: 403 confirmaria que o recurso existe.',
   })
+  @ApiParam({ name: 'id', format: 'uuid', description: 'Identificador do **paciente**.' })
   @ApiOkResponse({
     schema: {
       example: {
@@ -43,6 +54,10 @@ export class GetPatientController {
       },
     },
   })
+  // Sem `details`: quem recusa é o `ParseUUIDPipe` do parâmetro, não o schema Zod
+  // de um corpo — não há campo de payload a apontar.
+  @ApiValidationErrorResponse()
+  @ApiUnauthorizedErrorResponse()
   @ApiNotFoundResponse({
     description: 'Inexistente — ou de outro médico. A resposta é a mesma.',
     schema: {

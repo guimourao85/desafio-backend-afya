@@ -36,7 +36,7 @@ export interface PatientTimelineFilters {
 /**
  * A porta de persistência da agenda. `doctorId` em **todo** método que recebe um
  * identificador cru — a agenda de um médico não é alcançável a partir do token de
- * outro. A única exceção é `saveWithNotes`, e ela é explicada lá: o argumento já é
+ * outro. A única exceção é `appendNotes`, e ela é explicada lá: o argumento já é
  * a raiz escopada, então o escopo viaja no objeto em vez de num parâmetro.
  */
 export interface AppointmentRepository {
@@ -55,14 +55,13 @@ export interface AppointmentRepository {
    * estado completo e desassocia (`SET NULL`) o que não estiver nela. Com uma raiz
    * lida sem `relations`, isso significa apagar a referência das anotações já
    * gravadas — `null value in column "appointment_id" violates not-null constraint`,
-   * verificado no e2e. O `NOT NULL` foi a rede; sem ele o dano seria silencioso
-   * (sprint 04.02, decisão 18).
+   * verificado no e2e. O `NOT NULL` foi a rede; sem ele o dano seria silencioso.
    *
    * **Sem `doctorId`, e isso é deliberado.** Os outros métodos o exigem porque
    * recebem um `id` cru, que qualquer string satisfaz; aqui o argumento **é a raiz
    * já escopada** — só se obtém uma por `findByIdForDoctor`, `findByIdWithNotes` ou
    * `create`. O escopo viaja no objeto, e um parâmetro repetindo
-   * `appointment.doctorId` seria proteção decorativa (decisão 17).
+   * `appointment.doctorId` seria proteção decorativa.
    */
   appendNotes(appointment: Appointment): Promise<Appointment>;
 
@@ -71,7 +70,8 @@ export interface AppointmentRepository {
    * ou acrescentar uma nota.
    *
    * Anotar não precisa das anteriores: `addNote` funciona com a lista indefinida, e
-   * o `cascade` é `['insert']`, então o que não está carregado não é apagado.
+   * nenhuma escrita da raiz toca as notas — não há `cascade`; `save` atualiza só
+   * colunas da própria consulta e `appendNotes` insere apenas as novas.
    * Carregá-las aqui faria um `PATCH` de reagendamento puxar o prontuário inteiro
    * para reescrever uma coluna.
    */

@@ -22,7 +22,7 @@ describe('validateEnvironment', () => {
   it('devolve os valores já convertidos para os tipos do domínio de config', () => {
     const environment = validateEnvironment(VALID_ENV);
 
-    // O que chega de `process.env` é string; o que sai daqui não é (edge case 8).
+    // O que chega de `process.env` é string; o que sai daqui não é.
     expect(environment.PORT).toBe(3333);
     expect(environment.POSTGRES_PORT).toBe(5433);
     expect(environment.REFRESH_TOKEN_TTL_HOURS).toBe(8);

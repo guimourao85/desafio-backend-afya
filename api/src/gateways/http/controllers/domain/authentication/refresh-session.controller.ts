@@ -1,5 +1,11 @@
 import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
-import { ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
 
 import { RefreshSessionService } from '@/domains/domain/services/authentication/refresh-session.service';
 import { Public } from '@/framework/authentication/public.decorator';
@@ -8,6 +14,7 @@ import {
   AccessTokenPresenter,
 } from '@/presentation/presenters/access-token.presenter';
 
+import { ApiValidationErrorResponse } from '../../../decorators/api-validation-error.decorator';
 import { RefreshTokenDto } from '../../../schemas/domain/authentication.schema';
 
 /**
@@ -42,6 +49,18 @@ export class RefreshSessionController {
     description:
       'O refresh não é rotacionado: ele continua valendo até expirar ou até o logout. Duas chamadas concorrentes devolvem dois access tokens válidos.',
   })
+  // O exemplo não é executável, e não tem como ser: o refresh é opaco e nasce no
+  // login. O que ele entrega é a instrução de **onde** buscar o valor — melhor que o
+  // `"string"` que o Swagger UI geraria sozinho.
+  @ApiBody({
+    type: RefreshTokenDto,
+    examples: {
+      doLogin: {
+        summary: 'Cole o refreshToken devolvido por POST /api/auth/login',
+        value: { refreshToken: 'cole-aqui-o-refreshToken-do-login' },
+      },
+    },
+  })
   @ApiOkResponse({
     schema: {
       example: {
@@ -50,6 +69,12 @@ export class RefreshSessionController {
       },
     },
   })
+  @ApiValidationErrorResponse({
+    details: [{ path: 'refreshToken', message: 'O token de sessão é obrigatório.' }],
+  })
+  // 401 próprio pelo mesmo motivo do login (decisão 3): `INVALID_REFRESH_TOKEN` diz
+  // "sua sessão acabou, faça login de novo" — o cliente age diferente do 401 de
+  // token ausente, e o texto precisa distinguir os dois.
   @ApiUnauthorizedResponse({
     description: 'Refresh inexistente, expirado ou revogado — a resposta é a mesma nos três casos.',
     schema: {

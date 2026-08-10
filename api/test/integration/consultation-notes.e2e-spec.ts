@@ -202,8 +202,8 @@ describe('Anotações e linha do tempo (e2e)', () => {
     });
 
     /**
-     * A regressão da decisão 18, e a razão de este teste existir com **três**
-     * anotações em vez de uma: o caso quebrado é a segunda gravação. O service lê a
+     * A regressão que este teste existe para pegar, com **três** anotações em vez
+     * de uma: o caso quebrado é a segunda gravação. O service lê a
      * raiz sem `relations`, então a coleção chega parcial ao adapter; a implementação
      * ingênua (`save(raiz)` com `cascade`) leria essa lista curta como o estado
      * completo e desassociaria as notas já gravadas — `appointment_id` nulo, que só
@@ -242,10 +242,10 @@ describe('Anotações e linha do tempo (e2e)', () => {
     });
 
     /**
-     * O contrário do teste acima, e a regressão que a fricção PÓS desta sprint
-     * pegou: carregar as anotações dentro de `findByIdForDoctor` — em vez de num
-     * método separado — fazia **toda** rota que lê um agendamento passar a publicar
-     * `notes`, inclusive o `PATCH`, que só reescreve uma coluna.
+     * O contrário do teste acima, e uma regressão que a revisão de código flagrou: carregar
+     * as anotações dentro de `findByIdForDoctor` — em vez de num método separado —
+     * fazia **toda** rota que lê um agendamento passar a publicar `notes`, inclusive
+     * o `PATCH`, que só reescreve uma coluna.
      *
      * O campo é ausente, e não `[]`, porque estas rotas não leram as anotações:
      * `notes: []` diria "esta consulta não tem nenhuma", o que pode ser falso.
@@ -439,9 +439,9 @@ describe('Anotações e linha do tempo (e2e)', () => {
       expect(timeline.body.data[0].notes).toHaveLength(2);
     });
 
-    // Decisão 15: a FK é `NO ACTION` de propósito. Um `CASCADE` daria a um `DELETE`
-    // manual o poder de sumir com registro clínico — e a API nem tem `DELETE`
-    // físico, cancelar é `status = CANCELLED`.
+    // A FK é `NO ACTION` de propósito. Um `CASCADE` daria a um `DELETE` manual o
+    // poder de sumir com registro clínico — e a API nem tem `DELETE` físico,
+    // cancelar é `status = CANCELLED`.
     it('apagar fisicamente uma consulta com anotação é recusado pelo banco', async () => {
       const appointmentId = await agendar(ownerToken, patientId, JANEIRO);
 

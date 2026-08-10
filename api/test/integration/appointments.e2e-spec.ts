@@ -347,7 +347,9 @@ describe('Agendamentos (e2e)', () => {
     });
   });
 
-  // INV-03 — a lacuna declarada no edge case 7 de 03.01, agora exercitável.
+  // INV-03 — na sprint de pacientes esta cobertura só chegava até "o service não
+  // toca outra tabela", porque agendamento ainda não existia. Agora é exercitável
+  // de ponta a ponta.
   describe('INV-03 — anonimizar preserva o histórico', () => {
     it('anonimizar o paciente não apaga nem altera as consultas dele', async () => {
       await schedule();
@@ -374,9 +376,9 @@ describe('Agendamentos (e2e)', () => {
    * aqui: não se marca horário novo para quem foi esquecido; registra-se o que já
    * aconteceu com ele.
    *
-   * INV-02 lista três operações bloqueadas. Editar e agendar tinham enforcement
-   * desde F3 e F4; **reagendar** só ganhou na sprint 04.02 — até então o documento
-   * descrevia uma regra que o código não cumpria.
+   * INV-02 lista três operações bloqueadas. Editar e agendar já recusavam paciente
+   * anonimizado; **reagendar** é a que faltava — até essa checagem entrar, o
+   * documento descrevia uma regra que o código não cumpria.
    */
   describe('INV-02 — paciente com dados pessoais excluídos', () => {
     it('recusa reagendamento com 422', async () => {

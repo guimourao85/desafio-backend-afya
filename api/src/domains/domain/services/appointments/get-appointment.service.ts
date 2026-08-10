@@ -33,7 +33,7 @@ export const APPOINTMENT_NOT_FOUND_MESSAGE = 'Agendamento não encontrado.';
  * chega a ser lida. Não é um `if` de permissão depois de encontrar: é uma busca que
  * nunca encontra.
  *
- * Mais detalhes: PRODUCT.md — INV-04 · sprint 04.02, decisão 2.
+ * Mais detalhes: PRODUCT.md — INV-04.
  */
 @Injectable()
 export class GetAppointmentService {

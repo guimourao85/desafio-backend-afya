@@ -1,9 +1,11 @@
 import { Body, Controller, Param, ParseUUIDPipe, Patch } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiBody,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiParam,
   ApiTags,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
@@ -12,6 +14,8 @@ import { UpdatePatientService } from '@/domains/domain/services/patients/update-
 import { CurrentDoctor } from '@/framework/authentication/current-doctor.decorator';
 import { PatientHttpResponse, PatientPresenter } from '@/presentation/presenters/patient.presenter';
 
+import { ApiUnauthorizedErrorResponse } from '../../../decorators/api-unauthorized-error.decorator';
+import { ApiValidationErrorResponse } from '../../../decorators/api-validation-error.decorator';
 import { UpdatePatientDto } from '../../../schemas/domain/patient.schema';
 
 /**
@@ -41,6 +45,23 @@ export class UpdatePatientController {
     description:
       'Só os campos enviados mudam. Enviar `null` **apaga** o campo; omitir o deixa como está. Corpo vazio é 400.',
   })
+  @ApiParam({ name: 'id', format: 'uuid', description: 'Identificador do **paciente**.' })
+  // Dois exemplos porque a diferença entre eles **é** o contrato: omitir mantém,
+  // `null` apaga. Um exemplo só deixaria a metade perigosa para o cliente descobrir
+  // sozinho, apagando um telefone sem querer.
+  @ApiBody({
+    type: UpdatePatientDto,
+    examples: {
+      corrigir: {
+        summary: 'Corrigir campos — o que não vier fica como está',
+        value: { name: 'Pedro Álvares Cabral', weightKg: 76.5 },
+      },
+      apagar: {
+        summary: 'Apagar um campo opcional (null, não omissão)',
+        value: { phone: null },
+      },
+    },
+  })
   @ApiOkResponse({
     schema: {
       example: {
@@ -57,6 +78,13 @@ export class UpdatePatientController {
       },
     },
   })
+  // O exemplo é o do corpo vazio, que é o caso que surpreende: `path` vem **vazio**
+  // porque o erro é do objeto inteiro, não de um campo. Campo fora de faixa
+  // (`heightM`, `birthDate`…) traz o nome do campo no `path`, como nas outras rotas.
+  @ApiValidationErrorResponse({
+    details: [{ path: '', message: 'Informe ao menos um campo para atualizar.' }],
+  })
+  @ApiUnauthorizedErrorResponse()
   @ApiNotFoundResponse({
     schema: {
       example: {
