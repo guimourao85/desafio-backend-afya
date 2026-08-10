@@ -37,7 +37,7 @@ export class ListPatientsController {
     description:
       'A busca ignora caixa, mas **não** ignora acento. Base vazia devolve 200 com lista vazia, nunca 404.',
   })
-  @ApiQuery({ name: 'search', required: false, example: 'pedro' })
+  @ApiQuery({ name: 'search', required: false, description: 'Filtra por nome. Vazio lista todos.' })
   @ApiQuery({ name: 'page', required: false, example: 1 })
   @ApiQuery({ name: 'perPage', required: false, example: 20, description: 'Máximo 100.' })
   @ApiOkResponse({

@@ -293,7 +293,7 @@ describe('Autenticação (e2e)', () => {
         expect(resposta.body).toEqual({
           statusCode: 401,
           code: 'INVALID_REFRESH_TOKEN',
-          message: 'Sessão expirada. Faça login novamente.',
+          message: 'Refresh token inválido ou sessão expirada. Faça login novamente.',
         });
       }
     });

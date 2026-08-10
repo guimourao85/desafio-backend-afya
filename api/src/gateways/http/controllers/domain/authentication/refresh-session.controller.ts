@@ -76,12 +76,13 @@ export class RefreshSessionController {
   // "sua sessão acabou, faça login de novo" — o cliente age diferente do 401 de
   // token ausente, e o texto precisa distinguir os dois.
   @ApiUnauthorizedResponse({
-    description: 'Refresh inexistente, expirado ou revogado — a resposta é a mesma nos três casos.',
+    description:
+      'Refresh inexistente, expirado, revogado ou que nunca foi um refresh (ex.: o accessToken colado aqui) — a resposta é a mesma em todos os casos.',
     schema: {
       example: {
         statusCode: 401,
         code: 'INVALID_REFRESH_TOKEN',
-        message: 'Sessão expirada. Faça login novamente.',
+        message: 'Refresh token inválido ou sessão expirada. Faça login novamente.',
       },
     },
   })

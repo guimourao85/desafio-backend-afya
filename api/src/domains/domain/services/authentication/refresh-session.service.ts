@@ -23,11 +23,14 @@ export type RefreshSessionResult = Either<
 >;
 
 /**
- * A mesma resposta para as três formas de um refresh não valer: inexistente,
- * expirado e revogado. Distinguir diria a quem tem um palpite qual dos três ele
- * acertou — e o cliente faz a mesma coisa nos três casos (novo login).
+ * A mesma resposta para todas as formas de um refresh não valer: inexistente,
+ * expirado, revogado — ou um token que nunca foi um refresh, como o accessToken
+ * colado no campo errado. Distinguir diria a quem tem um palpite qual dos casos
+ * ele acertou — e o cliente faz a mesma coisa em todos (novo login). O texto não
+ * afirma causa nenhuma pelo mesmo motivo: "sessão expirada" sozinho mentia para
+ * quem só colou o token errado.
  */
-const INVALID_REFRESH_MESSAGE = 'Sessão expirada. Faça login novamente.';
+const INVALID_REFRESH_MESSAGE = 'Refresh token inválido ou sessão expirada. Faça login novamente.';
 
 /**
  * O mesmo texto que o guard de autenticação usa no 401 dele. O literal está

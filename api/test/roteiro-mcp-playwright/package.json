@@ -1,0 +1,12 @@
+{
+  "name": "roteiro-mcp-playwright",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Executa por máquina o Roteiro de avaliação do README, na UI real do Swagger",
+  "scripts": {
+    "roteiro": "node roteiro.js"
+  },
+  "dependencies": {
+    "playwright": "^1.62.1"
+  }
+}

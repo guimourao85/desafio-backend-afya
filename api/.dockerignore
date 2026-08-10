@@ -1,4 +1,7 @@
 node_modules
+# Sem o `**/` a linha de cima só pega o node_modules da raiz — o da ferramenta
+# de roteiro (test/roteiro-mcp-playwright) entraria no contexto de build.
+**/node_modules
 dist
 coverage
 .env
