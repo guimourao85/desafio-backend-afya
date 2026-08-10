@@ -169,8 +169,8 @@ Sprint de feature entrega o caso de uso, a constraint e o teste determinístico 
 mostram que a regra **existe**. A prova de que ela sobrevive a **concorrência**,
 **volume** e **retry** não entra ali: vive na sprint **06.01**
 ([sub-doc](desenvolvimento/sprints/sprint-06.01-concorrencia-idempotencia-e-carga.md)),
-a última da fila. Decisão do usuário em 09/08/2026 para o teste concorrente do slot,
-estendida a toda a classe de prova em 10/08/2026.
+a última da fila, **fechada em 10/08/2026**. Decisão do usuário em 09/08/2026 para o
+teste concorrente do slot, estendida a toda a classe de prova em 10/08/2026.
 
 **Esta seção é a fonte única.** Em conflito com qualquer outro ponto, **ela vence**.
 
@@ -187,12 +187,24 @@ comportamento **sob estresse**, não a existência da regra. Diluídos numa spri
 feature, cobram o custo da flakiness de quem estava entregando outra coisa; juntos,
 são revisados como o que são.
 
-> **O preço, declarado.** Até a 06.01 fechar, o que este projeto entrega são CRUDs
-> corretos e **não provados sob corrida nem sob volume**. Para INV-01
-> especificamente: está provado que a regra **existe** (índice único parcial no
-> banco **+** rejeição no caso de uso, ambos testados), **não** que ela **segura a
-> corrida**. Se a 06.01 cair por tempo, é este parágrafo que registra o que ficou
-> sem prova — não um silêncio.
+> **O preço, e o que dele foi pago (10/08/2026).** A 06.01 fechou como entrega
+> **parcial**, e a divisão é esta:
+>
+> - **Concorrência — provada.** 20 requisições simultâneas no mesmo slot produzem
+>   `1× 201` e `19× 409 SCHEDULE_CONFLICT`. E a prova foi verificada ao contrário:
+>   com `uk_appointments_doctor_slot` removido, as mesmas 20 criam **12** consultas.
+>   É o índice que fecha a corrida — a rejeição no caso de uso barrou 8 de 20.
+> - **Volume — medido.** p95/p99 das três listagens sobre 500 pacientes e 2.000
+>   consultas, registrados no sub-doc e no README. Nenhum débito de performance
+>   aberto, porque nenhum candidato destoou.
+> - **Retry — segue sem prova, e agora por decisão explícita.** `Idempotency-Key`
+>   foi **cortada** da 06.01 na releitura do PDF do desafio (sub-doc, decisão 15):
+>   nenhuma linha do enunciado a pede. **DEBT-05 permanece aberto e reconfirmado.**
+>
+> A prova de concorrência e de volume vive fora da suíte automatizada
+> (`npm run test:stress`, comando manual): é **demonstração, não regressão**, e nada
+> a dispara sozinha — RNF-12 (CI) foi cortado. Ler `test:e2e` verde como prova de
+> concorrência continua sendo erro.
 
 ---
 
@@ -750,9 +762,8 @@ global, e o projeto NestJS mora em `api/` (o compose usa `context: ./api`).
 
 ```
 prontomed-api/                     ← raiz do repositório
-├─ docker-compose.yml              api + postgres · build context ./api (Apêndice E)
+├─ docker-compose.yml              api + postgres + k6 · build context ./api (Apêndice E)
 ├─ CLAUDE.md · .gitignore
-├─ .github/workflows/ci.yml        GitHub só lê .github/ da RAIZ → jobs com working-directory: api
 └─ api/                            ← o projeto NestJS; cwd de todo `npm run`
    ├─ Dockerfile.dev · .dockerignore · .env.example · nest-cli.json
    ├─ package.json · package-lock.json · tsconfig.json · tsconfig.build.json
@@ -816,7 +827,8 @@ prontomed-api/                     ← raiz do repositório
 **Todo caminho relativo deste plano parte de `api/`** — os scripts de §14.2
 (`./src/infrastructure/...`), o `--config ./test/jest-e2e.json`, o `rootDir` do
 Jest e o `include` do tsconfig. Único artefato fora de `api/`: o
-`docker-compose.yml` e o workflow do CI.
+`docker-compose.yml`. *(Havia um segundo — o workflow do CI —, e ele saiu com o corte
+de RNF-12 em 10/08/2026. Não existe `.github/` neste repositório.)*
 
 **O barril `model-entities/index.ts` existe** porque o `DataSource` precisa da lista
 de entidades — mesma razão da referência técnica. Ele **não** é porta de entrada para os
@@ -1110,7 +1122,19 @@ livre; o índice parcial garante que **de fato** ficou livre no commit.
 | `POST /appointments` | ⚠️ efetiva | chave natural `(doctor_id, scheduled_at)` é única: retry vira 409 determinístico, nunca duplicata |
 | `POST /auth/refresh` | ✅ | sem rotação, o refresh não muda de estado: duas chamadas devolvem dois access tokens válidos (§8.2) |
 
-`Idempotency-Key` fica como ponto de extensão (DEBT-05).
+`Idempotency-Key` fica como ponto de extensão (DEBT-05), **reconfirmado em
+10/08/2026** — não reduzido, não fechado. A 06.01 chegou a desenhá-la inteira
+(tabela, migration, porta, adapter, módulo, interceptor, header, TTL, invariante e
+ADR) e a **cortou** na releitura do PDF do desafio: nenhuma linha do enunciado pede
+idempotência, nem como requisito funcional, nem como não-funcional, nem como item de
+avaliação — era a maior superfície da sprint para o único item sem base no
+enunciado ([regra 1 do prisma, §3.1](#3)). O rationale completo está no sub-doc,
+decisão 15.
+
+O que fica no lugar dela é o que a tabela acima já diz: `POST /appointments` tem
+chave natural e responde **409 determinístico** a um retry — seguro, nunca duplica.
+`POST /patients` não tem unicidade natural e um retry **cria duas linhas**. É esse o
+limite que DEBT-05 nomeia, e ele está dito com essas palavras no README.
 
 ### 12.4 Testes
 
@@ -1118,6 +1142,11 @@ livre; o índice parcial garante que **de fato** ficou livre no commit.
 | --- | --- | --- | --- |
 | **Unitário** | `Test.createTestingModule` + repositório in-memory via `overrideProvider(TOKEN)` | regra de negócio pura, sem banco | `*.spec.ts` ao lado do service |
 | **Integração** | `Test.createTestingModule({imports:[AppModule]})` + Supertest + Postgres real | rota → service → banco, **incluindo constraints** | `test/integration/*.e2e-spec.ts` |
+| **Carga (k6)** | imagem `grafana/k6` pelo compose, sob demanda (`npm run test:stress`) | o que só aparece **sob estresse**: corrida no slot e p95/p99 sob volume | `test/stress/stress-test.js` |
+
+> **A camada de carga é demonstração, não regressão.** Ela não roda em
+> `npm run test:e2e` e nada a dispara sozinha (RNF-12, CI, foi cortado). Um
+> `test:e2e` verde **não** é prova de concorrência — quem prova é o comando manual.
 
 O repositório in-memory implementa **a mesma porta**. Consequência do ADR-02:
 nenhum teste unitário mocka TypeORM — se precisar, há vazamento.
@@ -1132,7 +1161,7 @@ nenhum teste unitário mocka TypeORM — se precisar, há vazamento.
 | cancelar libera o horário; reagendar para lá → 201 | INV-01 | int. |
 | reagendar para horário ocupado → 409 | RF-04 / INV-01 | int. |
 | reagendar ou concluir consulta cancelada → 422 | F4 §3 | unit |
-| **duas requisições concorrentes no mesmo slot → exatamente um 201 e um 409** | ADR-09 | int. — **sprint 06.01**, não F4 ([regra: §3.2](#3)) |
+| **N requisições concorrentes no mesmo slot → exatamente um 201 e N-1 conflitos 409** | ADR-09 | **carga (k6)** — sprint 06.01, não F4 ([regra: §3.2](#3)). ✅ provado em 10/08/2026 |
 | anonimizar: PII nula + `anonymized_at` preenchido | RF-08 | unit + int |
 | anonimizar **preserva** contagem de consultas e anotações | INV-03 | int. |
 | anonimizado: novo agendamento → 422; **reagendamento → 422**; edição → 422 | INV-02 | unit |
@@ -1147,8 +1176,11 @@ nenhum teste unitário mocka TypeORM — se precisar, há vazamento.
 | nenhuma resposta contém `password_hash`/`token_hash` | INV-07 | int. |
 | validação: altura 0, peso negativo, nascimento futuro, email inválido, sexo fora do enum, campo desconhecido → 400 com `details` | RNF-04 | int. |
 
-> No teste de concorrência: pool com ≥2 conexões e asserção sobre o **conjunto**
-> (`[201, 409]` em qualquer ordem), nunca sobre a ordem.
+> No teste de concorrência: pool com ≥2 conexões (o do app é 10) e asserção sobre o
+> **conjunto** — contadores `created_201 == 1` e `conflict_409 == N-1` —, nunca sobre
+> a ordem. Afirmar qual requisição chegou primeiro é afirmar o que o Postgres não
+> promete. E o teste precisa da prova de que testa: ele foi verificado com o índice
+> removido, e aí o overbooking **acontece** (sub-doc 06.01, execução B).
 
 > **Três linhas corrigidas contra o código na fricção final da sprint 04**
 > (10/08/2026, [sprint-04.02](desenvolvimento/sprints/sprint-04.02-anotacoes.md)
@@ -1354,6 +1386,21 @@ Ordem por dependência real. Cada fase termina verde
 | --- | --- | --- | --- |
 | api | `api-prontomed` | 3333 | `nest start --watch`, volume montado |
 | database | `db-prontomed` | **5433** no host (5432 na rede) | `postgres:16-alpine`; o init cria `prontomed` e `prontomed_test` |
+| k6 | `k6-prontomed` | — | `grafana/k6`, **sobe junto com o resto** e fica ocioso (`entrypoint: sleep infinity`). Acionado por `npm run test:stress`, que faz `docker exec` nele (06.01) |
+
+> **Por que o k6 é imagem, e não dependência.** Ele não entra no `package.json`: a
+> ferramenta de carga é um binário Go que fala HTTP, e instalá-la como dependência
+> Node só para rodar um arquivo `.js` acrescentaria superfície ao build da API para
+> servir a um comando manual. O preço é 1 serviço no compose.
+
+> **Por que ele sobe sempre, e por que ocioso.** É POC avaliada localmente: um único
+> `docker compose up -d` deixa tudo pronto, e quem avalia não descobre `--profile`
+> nem puxa imagem em passo separado (decisão do usuário, 10/08/2026 — decisão 21 do
+> sub-doc 06.01). O `entrypoint` é sobrescrito para `sleep infinity` porque a imagem
+> do k6 é uma **CLI**: com o `command` natural (`run /scripts/stress-test.js`) o
+> container executaria o teste de estresse **no boot**, contra um banco sem
+> migrations, e morreria — o avaliador veria `Exited (99)` logo no primeiro `up -d`.
+> **Disponível não é a mesma coisa que disparado.**
 
 > **A porta do host é 5433, não 5432.** O `POSTGRES_PORT` do `.env` é a porta vista
 > **de fora** — o compose sobrescreve para 5432 dentro da rede. Com 5432 no `.env`,
@@ -1375,14 +1422,49 @@ Ordem por dependência real. Cada fase termina verde
   "lint":              "eslint \"{src,test}/**/*.ts\" --fix",
   "test":              "jest --passWithNoTests",
   "test:cov":          "jest --coverage",
-  "test:e2e":          "NODE_ENV=test jest --config ./test/jest-e2e.json --runInBand",
+  "test:e2e":          "npm run migration:run:test && NODE_ENV=test jest --config ./test/jest-e2e.json --runInBand",
   "migration:create":  "typeorm-ts-node-commonjs migration:create ./src/infrastructure/databases/typeorm/postgres/migrations/$npm_config_name",
   "migration:generate":"typeorm-ts-node-commonjs migration:generate ./src/infrastructure/databases/typeorm/postgres/migrations/$npm_config_name -d ./src/infrastructure/databases/typeorm/postgres/typeorm-database.datasource.ts",
   "migration:run":     "typeorm-ts-node-commonjs migration:run -d ./src/infrastructure/databases/typeorm/postgres/typeorm-database.datasource.ts",
+  // INTERNOS — degraus, não passos. Estão neste bloco porque ele é espelho do
+  // `package.json` e omiti-los seria drift; não estão em tabela de script nenhuma
+  // porque ninguém os digita. Quem os dispara está na coluna ao lado:
+  //   migration:run:test → test:e2e     |     seed:load → test:stress
+  "migration:run:test":"NODE_ENV=test npm run migration:run",
   "migration:revert":  "typeorm-ts-node-commonjs migration:revert -d ./src/infrastructure/databases/typeorm/postgres/typeorm-database.datasource.ts",
-  "seed":              "ts-node -r tsconfig-paths/register src/infrastructure/databases/typeorm/postgres/seeds/demo.seed.ts"
+  "seed":              "ts-node -r tsconfig-paths/register src/infrastructure/databases/typeorm/postgres/seeds/demo.seed.ts",
+  "seed:load":         "ts-node -r tsconfig-paths/register src/infrastructure/databases/typeorm/postgres/seeds/load.seed.ts",
+  "test:stress":       "docker exec api-prontomed npm run seed:load && docker exec k6-prontomed k6 run /scripts/stress-test.js"
 }
 ```
+
+> **`test:stress` é o único script que roda no HOST.** Todos os outros rodam dentro
+> do container (`docker exec api-prontomed npm run ...`), porque `node_modules` só
+> existe lá. Este é pura orquestração: ele não executa nada localmente, só faz
+> `docker exec` em dois containers — e o binário `docker` só existe no host.
+
+> **Regra: se o usuário não precisa executar, não é passo** (instrução do usuário,
+> 10/08/2026). Um comando de teste carrega as próprias pré-condições em vez de exigir
+> preparação — e o degrau é documentado no ponto em que o comando o usa, nunca numa
+> tabela de scripts.
+>
+> Dois comandos e nada mais, depois que o ambiente sobe e as migrations de
+> desenvolvimento rodam:
+>
+> | Comando | Pré-condição que ele resolve sozinho | Por que podia ser absorvida |
+> | --- | --- | --- |
+> | `test:e2e` | `migration:run:test` — cria as tabelas do `prontomed_test` | O banco de teste é do e2e e de mais ninguém. Como passo separado, esquecê-lo dava `relation does not exist` num comando que sabia se preparar |
+> | `test:stress` | `seed:load` — cria o médico de estresse e o volume de carga | O volume é pré-condição do teste, não escolha do operador (06.01, decisão 17) |
+>
+> Os dois degraus são **idempotentes** — `No migrations are pending` e "volume já
+> existia" —, então a chamada extra custa quase nada e a re-execução é livre. O `&&`
+> é o que faz disso **condição**, e não sugestão: falhou o degrau, o teste não roda.
+>
+> **O que NÃO foi absorvido, e por quê:** `migration:run` no banco de
+> desenvolvimento continua sendo passo do usuário. Ele não serve só aos testes — é o
+> que faz o Swagger e o roteiro de avaliação funcionarem. Absorvê-lo em `test:stress`
+> esconderia, dentro de um comando de teste, a preparação do ambiente que a pessoa
+> vai usar à mão.
 
 > **Nunca** `npx typeorm` direto — sempre `typeorm-ts-node-commonjs` pelos scripts.
 
@@ -1418,9 +1500,13 @@ quem acabou de clonar:
 6. **Como rodar os testes** — unit, e2e, e o que cada suíte prova.
 7. **Arquitetura em cinco linhas + ponteiro** — camadas, regra de dependência, agregados, DI do Nest, entity do ORM; o documento de arquitetura é `api/README.md` e o README raiz **não o repete**. *(Reescrito na 05.02, decisão 4: pedia "um diagrama e cinco linhas", e um segundo diagrama de camadas no raiz é drift garantido em duas cópias — o único diagrama do raiz é o ER do item 8.)*
 8. **Modelagem** — ER em Mermaid.
-9. **Decisões e limites** — ADRs resumidos e os débitos, para deixar claro o que foi escolha.
+9. **Decisões e limites** — ADRs resumidos e os débitos, para deixar claro o que foi escolha. *(A tabela de 13 ADRs no raiz é **duplicação declarada** de `PRODUCT.md §adrs`, decidida em 10/08/2026: a decisão é o que o avaliador precisa ver numa passada, e mandá-lo abrir outro arquivo custaria mais que o drift. O raiz carrega a nota de que `PRODUCT.md` vence em caso de divergência. É a **única** exceção à fonte única no README.)*
+10. **Documentação** — índice de qual documento é autoridade sobre o quê. *(Acrescentado em 10/08/2026 com a reescrita que enxugou o raiz de 509 para 400 linhas: se o README é o mapa e não o território, o índice é o item que torna isso operável.)*
 
-O que o README **não** faz: repetir este plano, explicar DDD, ou pedir desculpa.
+O que o README **não** faz: repetir este plano, explicar DDD, ou pedir desculpa. E, desde
+a reescrita de 10/08/2026, **não guarda detalhe técnico que tenha dono** — método e
+números da prova sob estresse foram para `api/test/stress/README.md`, ambiente de
+execução e scripts para `api/README.md`, decisões de banco para `PRODUCT.md §banco`.
 
 ---
 
@@ -1443,7 +1529,7 @@ O que o README **não** faz: repetir este plano, explicar DDD, ou pedir desculpa
 ### 16.2 Migrations — gerado pela ferramenta, controlado por humano
 
 1. A entity declara **tudo** (nome de tabela, `primaryKeyConstraintName`, `@Index` nomeado com `where`, `@Check`, `foreignKeyConstraintName`) — §6.3.
-2. `npm run migration:generate --name=<escopo>` produz o SQL.
+2. `npm run migration:generate --name=sprint<NNMM>-<escopo>` produz o SQL — **sem o ponto**, porque o CLI monta a classe a partir do `--name` e não sanitiza: `--name=sprint09.01-probe` emite `export class Sprint09.01Probe…`, que não é TypeScript válido. Gerado, `git mv` insere o ponto no **arquivo**: `<timestamp>-sprint<NN.MM>-<escopo>.ts`, classe `Sprint<NNMM><Escopo><timestamp>` (`review-database.md §regras`, regra 7).
 3. **Revisão obrigatória** do arquivo gerado contra o DDL de §6.2 antes de comitar: nome de constraint, `WHERE` do índice parcial, tipo de coluna, `down()` coerente.
 4. `npm run migration:run` aplica. **Nunca** `synchronize: true`; **nunca** `migrationsRun: true` no boot.
 5. **Forward-only:** migration aplicada nunca é editada — a correção é uma migration nova.

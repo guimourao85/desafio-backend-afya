@@ -77,15 +77,27 @@ fechamento de fase (`PLAN.md §13`) · mudança em invariante.
 
 ### Determinismo em teste de concorrência
 
-> **Quando cobrar.** Prova sob corrida, volume e retry é da **sprint 06.01**, por
-> regra de escopo em [PLAN.md §3.2](../PLAN.md). Fora dela, a ausência **não é
-> achado** — ver §verifica, anti-falso-positivo. As exigências abaixo valem quando o
-> teste existe: na 06.01, ou em qualquer sprint que decida entregá-lo.
+> **Onde a prova mora, desde 10/08/2026.** Corrida e volume são cobráveis na
+> **camada de carga** (`api/test/stress/stress-test.js`, rodada por
+> `npm run test:stress`), que a sprint 06.01 entregou. **Jest não ataca
+> concorrência** e não deve ser cobrado por isso: ausência de spec concorrente em
+> `*.spec.ts` ou `*.e2e-spec.ts` não é achado, em sprint nenhuma. Retry sob
+> `Idempotency-Key` continua **sem prova e sem mecanismo**, por decisão (DEBT-05
+> reconfirmado) — cobrar também não é achado.
 
-O teste de duas requisições simultâneas no mesmo slot (ADR-09) exige:
-- pool com **≥2 conexões** — senão o driver serializa e o teste prova o oposto do pretendido;
-- asserção sobre o **conjunto** dos resultados (`[201, 409]` em qualquer ordem), nunca sobre qual chegou primeiro;
-- verificação final no banco: **exatamente uma** linha viva no slot.
+O teste de N requisições simultâneas no mesmo slot (ADR-09 / INV-01) exige:
+- pool com **≥2 conexões** — senão o driver serializa e o teste prova o oposto do pretendido (o do app é 10);
+- asserção sobre o **conjunto** dos resultados — contadores `created_201 == 1` e `conflict_409 == N-1` —, nunca sobre qual chegou primeiro;
+- verificação final no banco: **exatamente uma** linha viva no slot;
+- o 409 traduzido para o `code` do catálogo (`SCHEDULE_CONFLICT`), e não `QueryFailedError` vazando como 500;
+- estado inicial limpo pelo próprio teste, e horário **constante literal** — slot derivado do relógio é data incontrolada.
+
+**E a prova de que o teste testa.** Um teste de corrida fica verde sem nunca ter
+havido corrida se os VUs serializarem: a checagem do caso de uso pega o conflito e a
+saída é idêntica à do sistema correto. Por isso a camada de carga carrega um
+procedimento de contraprova — rodar uma vez com o índice único removido e ver o
+overbooking acontecer (sub-doc 06.01, execução B; medido: **12 de 20** passam).
+Camada de carga entregue **sem** contraprova registrada é achado **ALTO**.
 <!-- /§regras -->
 
 ---
@@ -103,7 +115,7 @@ Para a fase em revisão, cada invariante tocada tem teste nomeado?
 
 | Invariante | Teste que a prova |
 | --- | --- |
-| INV-01 | mesmo slot → 409 · outro médico → 201 · cancelado libera · reagendar para ocupado → 409 · *(duas requisições concorrentes → um 201 e um 409 — **só na 06.01**, `PLAN.md §3.2`; não cobre fora dela)* |
+| INV-01 | mesmo slot → 409 · outro médico → 201 · cancelado libera · reagendar para ocupado → 409 · *(N concorrentes → um 201 e N-1 409: **camada de carga**, `test/stress/stress-test.js`; não é cobrável em Jest)* |
 | INV-02 | anonimizado: agendar → 422 · editar → 422 |
 | INV-03 | anonimizar preserva a contagem de consultas e anotações |
 | INV-04 | recurso de outro médico → 404 (não 403), em toda rota com `:id` |
@@ -147,7 +159,9 @@ enquanto a API cresce para dezessete. Verde sem cobertura é o pior estado poss�
 
 - Ausência de meta percentual de cobertura: decisão do projeto (a lista de casos obrigatórios é o gate).
 - Ausência de teste para getter trivial, presenter simples ou mapper sem regra.
-- **Ausência de prova sob corrida, volume ou retry, fora da sprint 06.01: não é achado.** Teste de concorrência, de carga e de idempotência sob retry são da sprint dedicada, por regra de escopo em [PLAN.md §3.2](../PLAN.md). Sprint de feature entrega a regra e o teste determinístico; cobrar dela a prova sob estresse é cobrar o que o projeto decidiu concentrar em outro lugar. **Vale inclusive para INV-01**, cujo índice único parcial já está no banco desde F4.
+- **Ausência de spec Jest concorrente: não é achado, em sprint nenhuma.** Jest não ataca corrida — a prova de concorrência e de volume vive na **camada de carga** (`npm run test:stress`), entregue pela 06.01 em 10/08/2026. Cobrar um `*.e2e-spec.ts` que dispare duas requisições ao mesmo tempo é pedir o teste frágil que a regra de escopo ([PLAN.md §3.2](../PLAN.md)) existe para evitar.
+- **Ausência de prova sob retry: não é achado.** `Idempotency-Key` foi cortada na releitura do PDF do desafio (sub-doc 06.01, decisão 15) e **DEBT-05 segue aberto e reconfirmado**. Não há mecanismo a testar.
+- **Camada de carga fora de `npm run test:e2e`: não é achado, é o desenho.** Ela é demonstração, não regressão, e o preço está declarado no README e em `PLAN.md §12.4`. O que **é** achado (ALTO) é alguém tratar `test:e2e` verde como prova de concorrência.
 - Duplicação de setup entre testes de integração: legibilidade vale mais que DRY em teste.
 <!-- /§verifica -->
 
@@ -187,7 +201,7 @@ Invariante da fase sem teste → **REPROVADO**, independentemente do resto.
 - [ ] Caminho de erro testado, não só o feliz
 - [ ] Nenhum `sleep`, nenhuma dependência de ordem, nenhuma data incontrolada
 - [ ] Nenhum mock de TypeORM em teste unitário
-- [ ] *(só quando a sprint entrega prova sob estresse — 06.01, `PLAN.md §3.2`)* Teste de concorrência com pool ≥2 e asserção sobre conjunto
+- [ ] *(só quando a sprint toca a camada de carga)* Teste de concorrência com pool ≥2, asserção por **contador** sobre o conjunto, slot constante literal e **contraprova registrada** (rodada com o índice removido)
 - [ ] Integração usa `prontomed_test` e limpa estado em `beforeEach`
 - [ ] Asserções específicas (status exato, campo exato), não frouxas
 - [ ] Nomes descrevem comportamento

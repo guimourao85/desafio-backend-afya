@@ -4,11 +4,17 @@ Backend de um prontuário eletrônico de consultório. O médico se autentica, m
 própria base de pacientes, opera a agenda — que recusa dois atendimentos no mesmo
 horário — e registra as anotações de cada consulta. Quando um paciente exerce o
 direito ao esquecimento, a identificação é apagada **sem** perder o histórico de
-atendimentos.
+atendimentos. Há uma única persona, e ela só enxerga o que é seu: isso não é filtro de
+tela, é regra do domínio, enforçada em toda leitura e escrita.
 
-Há uma única persona e ela só enxerga o que é seu: paciente, agenda e anotação de
-outro médico não existem para ela. Isso não é filtro de tela — é regra do domínio,
-enforçada em toda leitura e escrita.
+Node 22 · TypeScript 5 strict · **NestJS 10** · TypeORM · PostgreSQL 16 ·
+Zod (`nestjs-zod`) · Jest + Supertest · Docker Compose. Ambiente de **desenvolvimento
+apenas** — a POC é avaliada localmente (ADR-12).
+
+> **Este README é o mapa, não o território.** Ele leva você do clone à avaliação e
+> aponta o dono de cada assunto. Cada documento apontado é **autoridade única** sobre o
+> que cobre; nada aqui compete com eles. O índice completo está em
+> [**Documentação**](#documentação), no fim.
 
 **O desafio.** Resposta a um desafio técnico de backend: API REST com autenticação,
 cadastro de pacientes, agenda com regra de conflito, anotações de atendimento,
@@ -19,9 +25,8 @@ interpretação dos wireframes e a rastreabilidade requisito → fase estão em
 ## Do clone à validação
 
 **Pré-requisito: Docker. Só isso** — nem Node, nem npm, nem Postgres no host,
-inclusive para os testes. Todo comando roda da **raiz** do repositório, e todo
-comando de aplicação roda **dentro do container** (o porquê está logo abaixo da
-tabela).
+inclusive para os testes. Todo comando roda da **raiz** do repositório, e todo comando
+de aplicação roda **dentro do container**.
 
 ### Subir
 
@@ -44,42 +49,32 @@ tabela).
 | 10  | Tipos                                       | `docker exec api-prontomed npm run typecheck`          |
 | 11  | Compilação                                  | `docker exec api-prontomed npm run build`              |
 | 12  | **Testes unitários** — sem banco            | `docker exec api-prontomed npm test`                   |
-| 13  | Criar as tabelas no banco de **teste**      | `docker exec api-prontomed npm run migration:run:test` |
-| 14  | **Testes de integração** — Postgres real    | `docker exec api-prontomed npm run test:e2e`           |
+| 13  | **Testes de integração** — Postgres real    | `docker exec api-prontomed npm run test:e2e`           |
+| 14  | **Prova sob estresse** — concorrência e carga | `cd api && npm run test:stress`                      |
 | —   | Derrubar tudo (`-v` apaga também os bancos) | `docker compose down [-v]`                             |
 
-**Sobre os passos que têm pegadinha:**
+**Os quatro passos que têm pegadinha:**
 
-3. Os valores do exemplo sobem o ambiente inteiro, inclusive um `JWT_SECRET` que
-   satisfaz o mínimo de 32 caracteres do schema. Fora de `localhost`, troque:
-   `openssl rand -base64 48`.
-4. O compose cria o volume, roda `api/db/init-test-db.sh` para criar os dois bancos
-   (`prontomed` e `prontomed_test`) e só então sobe a API — quem garante a ordem é o
-   `depends_on: service_healthy`.
-5. Resposta esperada: `{"status":"ok"}`. Se demorar, a API ainda está compilando —
-   `docker logs api-prontomed --tail 20` até aparecer `successfully started`.
-6. **Não é opcional, e o passo 5 não denuncia a falta dele:** o healthcheck não sonda
-   o banco de propósito (`api/docs/PLAN.md §13 F0`). Sem migrations a API sobe verde e
-   só quebra na primeira rota que tocar uma tabela.
-7. Cria o médico com a credencial de `SEED_DOCTOR_EMAIL` / `SEED_DOCTOR_PASSWORD` do
-   `.env` — o par exato está em [**Credenciais**](#credenciais), logo abaixo. É por
-   ele que se faz o login do passo 8; **sem este passo não há com que autenticar**.
-   Junto com o médico vem a base que espelha os wireframes: **três pacientes**
-   (Pedro, Eduardo e Bruno), **três consultas** — duas concluídas, cada uma com sua
-   anotação, e uma agendada — e **Bruno de propósito sem consulta nenhuma**, que é o
-   caso de linha do tempo vazia. Datas fixas (2026 e 2027), nunca relativas a hoje.
-   **Pode rodar quantas vezes quiser:** a partir da segunda execução o script apenas
-   reconfirma a senha do `.env` e **não insere mais nada** — não duplica paciente nem
-   colide no horário da agenda. Trocou `SEED_DOCTOR_PASSWORD`? Rode de novo e o login
-   passa a aceitar a nova.
-8. O Swagger é a ferramenta de avaliação: cada endpoint é executável dali (documento
-   cru em `/api/docs-json`). Todo corpo tem exemplo executável, e todo erro
-   documentado (400, 401, 404, 409, 422) mostra o payload exato que a API devolve.
-   O que fazer depois de abrir está no [**Roteiro de avaliação**](#roteiro).
-9. Comando **separado** do passo 6 de propósito: são dois bancos no mesmo container,
-   e o e2e nunca toca o de desenvolvimento — é o que impede um teste de destruir o
-   seed do passo 7. **Pular este passo faz o passo 14 quebrar** com
-   `relation does not exist`.
+- **4** — sobem **três** containers: API, Postgres e o k6 da [prova sob
+  estresse](#prova-sob-estresse), que fica ocioso até você chamá-lo.
+- **6** — **não é opcional, e o passo 5 não denuncia a falta dele:** o healthcheck não
+  sonda o banco de propósito. Sem migrations a API sobe verde e quebra na primeira rota
+  que tocar uma tabela.
+- **7** — cria o médico de [**Credenciais**](#credenciais) — **sem ele não há com que
+  autenticar** — mais a base que espelha os wireframes: três pacientes, três consultas
+  (duas concluídas com anotação, uma agendada) e um paciente **de propósito sem
+  consulta**, que é o caso de linha do tempo vazia. Datas fixas, nunca relativas a hoje.
+  **Idempotente:** da segunda execução em diante só reconfirma a senha do `.env`.
+- **13 e 14** — **auto-contidos**: não há nada a preparar antes deles. O `test:e2e`
+  cria as tabelas do banco de **teste** por conta própria (são dois bancos, e o e2e
+  nunca toca o de desenvolvimento — é o que impede um teste de destruir o seed do
+  passo 7), e o `test:stress` resolve o próprio volume de carga. Depois do passo 6 os
+  dois rodam do zero, em qualquer ordem e quantas vezes você quiser. O **14** é o
+  único que roda no host: ele é orquestração e precisa do `docker`, que não existe
+  dentro do container.
+
+Por que os comandos de aplicação rodam com `docker exec`, o que o compose monta e como
+os dois bancos nascem: [`api/README.md`](api/README.md#ambiente-de-execução).
 
 <a id="credenciais"></a>
 
@@ -99,17 +94,17 @@ fail-closed:** ele recusa rodar com qualquer `APP_ENV` diferente de `dev`
 caminho em que essa credencial chegue a um ambiente que não seja a sua máquina. Trocou
 `SEED_DOCTOR_PASSWORD` no `.env`? Rode o seed de novo e o login passa a aceitar a nova.
 
-Este é o **único** lugar do projeto onde o par aparece escrito para ser lido. O
-Swagger também o traz preenchido no exemplo do `POST /api/auth/login` — lá ele não é
+Este é o **único** lugar do projeto onde o par aparece escrito para ser lido. O Swagger
+também o traz preenchido no exemplo do `POST /api/auth/login` — lá ele não é
 documentação, é o botão **Execute** funcionando de primeira.
 
 <a id="roteiro"></a>
 
 ## Roteiro de avaliação
 
-**Dez passos, cinco atos, tudo pelo `/api/docs`.** Cada ato responde uma pergunta, e
-usa o que o anterior criou — seguir fora de ordem quebra a corrente. Uns vinte minutos,
-no ritmo de quem lê as respostas.
+**Dez passos, cinco atos, tudo pelo `/api/docs`.** Cada ato responde uma pergunta e usa
+o que o anterior criou — seguir fora de ordem quebra a corrente. Uns vinte minutos, no
+ritmo de quem lê as respostas.
 
 A base já vem populada pelo seed do passo 7, mas os passos 3 e 5 criam **dados
 próprios**: o objetivo é ver a criação acontecendo, não só o resultado pronto. Use
@@ -127,130 +122,161 @@ estraga o estado de demonstração para a próxima leitura.
 |              | 7   | `DELETE /api/appointments/:id` do passo 5 → `POST` de novo **no mesmo horário**     | 204 e depois **201** — RF-04: cancelar **devolve** o horário à agenda           |
 | **Consulta** | 8   | `POST /api/appointments/:id/notes` na consulta que acabou de nascer no passo 7      | **201** — RF-05                                                                 |
 |              | 9   | `GET /api/patients/:id/appointments` com o `id` do passo 3                          | 200 — RF-06: linha do tempo, do mais recente para trás, com as anotações        |
-| **LGPD**     | 10  | `DELETE /api/patients/:id` do passo 3 → **repita o passo 9**                        | 204, PII apagada, **histórico intacto** — RF-08, o requisito mais difícil daqui |
+| **LGPD**     | 10  | `DELETE /api/patients/:id` do passo 3 → repita o passo 9 e abra `GET /api/patients/:id` | 204; a timeline mantém o **histórico intacto** e a ficha mostra a **PII apagada** — RF-08, o requisito mais difícil daqui |
 
-**Sobre o 409 do passo 6:** o que você vê é a checagem do caso de uso — ela consulta o
-horário antes de gravar. A segunda camada é um índice único **parcial** no Postgres, e
-ela existe porque a primeira não resolve duas requisições **simultâneas**: as duas
-consultam antes de qualquer uma gravar, e as duas passam. Pelo Swagger, em sequência,
-só a primeira camada é exercitada — a segunda está no banco desde a F4 e ainda não foi
-provada sob corrida ([o que estes testes ainda não provam](#testes)).
+**O 409 do passo 6 é só a primeira das duas camadas.** O que você vê é a checagem do
+caso de uso, que consulta o horário antes de gravar; ela não resolve duas requisições
+**simultâneas**. A segunda camada é um índice único **parcial** no Postgres, e tem
+prova própria e quantificada — [Prova sob estresse](#prova-sob-estresse).
 
 **Por que o passo 7 existe:** sem ele, INV-01 fica demonstrada pela metade. Um sistema
 que recusa o horário ocupado e **não** o libera de volta no cancelamento está
-igualmente errado — só que o defeito não aparece no 409.
+igualmente errado — e esse defeito não aparece no 409.
 
-**O que isso faz aparecer no passo 9:** a linha do tempo vai trazer **duas** consultas
-no mesmo horário — a que você cancelou, com `status: CANCELLED`, e a que nasceu no
-lugar dela. Não é duplicata: cancelar tira o horário da regra de unicidade, não do
-histórico. O prontuário guarda que houve um cancelamento.
+**O que isso faz aparecer no passo 9:** a linha do tempo traz **duas** consultas no
+mesmo horário — a cancelada, com `status: CANCELLED`, e a que nasceu no lugar dela. Não
+é duplicata: cancelar tira o horário da regra de unicidade, não do histórico.
 
 **Por que o passo 10 fecha o roteiro:** o enunciado pede apagar os dados pessoais
-_mantendo o histórico de consulta_. Os dois lados são visíveis no mesmo `GET`: o nome
-vira `Paciente anonimizado`, telefone, email e nascimento somem — e as consultas, com
-as anotações, continuam lá.
+_mantendo o histórico de consulta_, e cada lado tem o seu `GET`. Na linha do tempo as
+consultas e anotações continuam lá; na ficha o nome virou `Paciente anonimizado` e
+telefone, email e nascimento sumiram. A timeline não expõe dado pessoal — de propósito:
+é por isso que a anonimização não aparece nela.
 
 O roteiro percorre **9 das 17 rotas**. As outras oito (`health`, `refresh`, `logout`,
 detalhe e edição de paciente e de consulta, listagem da agenda) estão no Swagger com
 exemplo executável, e ficaram fora porque nenhuma acrescenta requisito que estes dez
 passos já não mostrem.
 
+**Este roteiro também roda por máquina:**
+[`api/test/roteiro-mcp-playwright/`](api/test/roteiro-mcp-playwright/) dirige o Swagger
+real com Playwright — os mesmos cliques, na mesma ordem, com uma asserção por promessa
+deste texto. É como as divergências entre o que o roteiro dizia e o que a API fazia
+foram encontradas antes de você.
+
 ## Requisitos atendidos
 
-Requisito não envelhece; o que muda é a coluna da direita. **Funcionais** (§1.1 do
-[`PLAN.md`](api/docs/PLAN.md)):
+**18 dos 20 requisitos do enunciado, e os 11 obrigatórios estão todos entregues.** Os
+dois que faltam são desejáveis, saem da mesma decisão e o motivo está na própria linha.
 
-| ID        | Requisito                                   | Tipo        | Onde está                                                                     |
-| --------- | ------------------------------------------- | ----------- | ----------------------------------------------------------------------------- |
-| **RF-01** | Cadastrar paciente                          | Obrigatório | `POST /api/patients` — passo 3                                                |
-| **RF-02** | Listar e editar o perfil dos pacientes      | Obrigatório | `GET /api/patients` — passo 4; `GET`/`PATCH /api/patients/:id` no Swagger     |
-| **RF-03** | Cadastrar agendamento                       | Obrigatório | `POST /api/appointments` — passo 5                                            |
-| **RF-04** | Listar, alterar e excluir agendamentos      | Obrigatório | `DELETE /api/appointments/:id` — passo 7; `GET` e `PATCH` no Swagger          |
-| **RF-05** | Anotar uma observação durante a consulta    | Obrigatório | `POST /api/appointments/:id/notes` — passo 8                                  |
-| **RF-06** | Visualizar as anotações das consultas       | Obrigatório | `GET /api/patients/:id/appointments` — passo 9                                |
-| **RF-07** | Não permitir dois pacientes na mesma hora   | Desejável   | índice único **parcial** no Postgres + 409 `SCHEDULE_CONFLICT` — passos 6 e 7 |
-| **RF-08** | Excluir dados pessoais mantendo o histórico | Desejável   | `DELETE /api/patients/:id` — anonimização in-place (ADR-10), passo 10         |
+### Funcionais
 
-**Não funcionais** (§1.2):
+| ID        | Requisito do enunciado                                                        | Tipo        | Status | Onde conferir                                                                 |
+| --------- | ----------------------------------------------------------------------------- | ----------- | ------ | ----------------------------------------------------------------------------- |
+| **RF-01** | Cadastrar paciente: nome, telefone, email, nascimento, sexo, altura e peso    | Obrigatório | ✅     | `POST /api/patients` — passo 3. Os sete campos estão no schema e na tabela    |
+| **RF-02** | Listar e editar o perfil dos pacientes                                        | Obrigatório | ✅     | `GET /api/patients` — passo 4; `GET` e `PATCH /api/patients/:id` no Swagger   |
+| **RF-03** | Cadastrar agendamento de consulta                                             | Obrigatório | ✅     | `POST /api/appointments` — passo 5                                            |
+| **RF-04** | Listar, alterar e excluir agendamentos                                        | Obrigatório | ✅     | `GET` e `PATCH` no Swagger; `DELETE /api/appointments/:id` — passo 7          |
+| **RF-05** | Anotar uma observação durante a consulta                                      | Obrigatório | ✅     | `POST /api/appointments/:id/notes` — passo 8                                  |
+| **RF-06** | Visualizar as anotações das consultas                                         | Obrigatório | ✅     | `GET /api/patients/:id/appointments` — passo 9                                |
+| **RF-07** | Não deixar cadastrar dois pacientes na mesma hora                             | Desejável   | ✅     | índice único **parcial** no Postgres + 409 `SCHEDULE_CONFLICT` — passos 6 e 7 |
+| **RF-08** | Excluir os dados pessoais mantendo o histórico de consulta (LGPD)             | Desejável   | ✅     | `DELETE /api/patients/:id` — anonimização in-place (ADR-10), passo 10         |
 
-| ID         | Requisito                        | Tipo        | Onde está                                                                                          |
-| ---------- | -------------------------------- | ----------- | -------------------------------------------------------------------------------------------------- |
-| **RNF-01** | API REST (HTTP/JSON)             | Obrigatório | NestJS 10, verbos e status semânticos, envelope de erro único                                      |
-| **RNF-02** | Node.js (JS ou TS)               | Obrigatório | Node 22 + TypeScript strict                                                                        |
-| **RNF-03** | Documentação da API gerada       | Obrigatório | `/api/docs`, gerado dos **schemas Zod** (`nestjs-zod`) — fonte única (ADR-07)                      |
-| **RNF-04** | Dados validados na escrita       | Obrigatório | Zod na borda + invariantes no domínio + `CHECK`/`UNIQUE` no banco (três camadas)                   |
-| **RNF-05** | Testes unitários e/ou integração | Obrigatório | as duas camadas — [**Testes**](#testes)                                                            |
-| **RNF-06** | Documentação da modelagem (ER)   | Desejável   | [**Modelagem**](#modelagem)                                                                        |
-| **RNF-07** | MySQL ou PostgreSQL              | Desejável   | PostgreSQL 16 + TypeORM, migrations geradas e revisadas à mão                                      |
-| **RNF-08** | Setup com docker-compose         | Desejável   | `docker compose up -d` sobe API e banco; Docker é o único pré-requisito                            |
-| **RNF-09** | Hospedar em cloud                | Desejável   | **fora de escopo, por decisão** — ADR-12: a POC é avaliada localmente                              |
-| **RNF-10** | Autenticação/autorização         | Desejável   | JWT curto + refresh opaco revogável, guard global — passos 1 e 2                                   |
-| **RNF-11** | Lint / qualidade                 | Desejável   | ESLint (com a regra que enforça a fronteira de camadas) + Prettier + `tsc`                         |
-| **RNF-12** | Pipeline automatizado (CI)       | Desejável   | **fora de escopo, por decisão** — cortado pelo prisma de simplicidade (`PLAN.md §3.1`), sem débito |
+**Como o RF-04 lê "excluir":** o `DELETE` **cancela** — a linha continua no banco com
+`status: CANCELLED` e o horário volta a aceitar agendamento. Registro clínico não se
+apaga, e é isso que mantém o RF-08 coerente: se a consulta sumisse, não haveria
+histórico para preservar quando o paciente é anonimizado.
 
-Os dois "fora de escopo" são **escolha declarada, não lacuna**: os gates que um
-pipeline rodaria são os passos 9 a 14 de [Do clone à validação](#do-clone-à-validação)
-— eles existem hoje, e rodam com um comando cada.
+### Não funcionais
 
-## Stack
+| ID         | Requisito do enunciado                                    | Tipo        | Status | Onde conferir                                                                                    |
+| ---------- | --------------------------------------------------------- | ----------- | ------ | -------------------------------------------------------------------------------------------------- |
+| **RNF-01** | API REST (HTTP/JSON)                                      | Obrigatório | ✅     | NestJS 10, 17 rotas, verbos e status semânticos, envelope de erro único                          |
+| **RNF-02** | Node.js (JavaScript ou TypeScript)                        | Obrigatório | ✅     | Node 22 + TypeScript strict                                                                      |
+| **RNF-03** | Documentação da API gerada                                | Obrigatório | ✅     | `/api/docs`, gerado dos **schemas Zod** (`nestjs-zod`) — fonte única (ADR-07)                    |
+| **RNF-04** | Dados validados na inserção/atualização                   | Obrigatório | ✅     | Zod na borda + invariantes no domínio + `CHECK`/`UNIQUE` no banco (três camadas)                 |
+| **RNF-05** | Testes unitários e/ou de integração                       | Obrigatório | ✅     | as duas camadas, e uma terceira — [**Testes**](#testes)                                          |
+| **RNF-06** | Documentação da modelagem do banco (ER)                   | Desejável   | ✅     | [**Modelagem**](#modelagem)                                                                      |
+| **RNF-07** | MySQL ou PostgreSQL, com ou sem ORM                       | Desejável   | ✅     | PostgreSQL 16 + TypeORM, migrations geradas e revisadas à mão                                    |
+| **RNF-08** | Setup de ambiente com docker/docker-compose               | Desejável   | ✅     | `docker compose up -d` sobe API, banco e a ferramenta de carga; Docker é o único pré-requisito   |
+| **RNF-09** | Hospedar em ambiente cloud                                | Desejável   | ⛔     | **fora de escopo, por decisão** — ver abaixo                                                     |
+| **RNF-10** | Autenticação e/ou autorização                             | Desejável   | ✅     | JWT curto + refresh opaco revogável, guard global — passos 1 e 2                                 |
+| **RNF-11** | Ferramenta de lint ou qualidade                           | Desejável   | ✅     | ESLint (com a regra que enforça a fronteira de camadas) + Prettier + `tsc`                       |
+| **RNF-12** | Deploy automatizado via pipeline                          | Desejável   | ⛔     | **fora de escopo, por decisão** — ver abaixo                                                     |
 
-Node 22 · TypeScript 5 strict · **NestJS 10** · TypeORM · PostgreSQL 16 ·
-Zod (`nestjs-zod`) · Jest + Supertest · Docker Compose.
+**Por que cloud e pipeline ficaram de fora — é uma decisão, não duas.** A POC é avaliada
+localmente (ADR-12): sem ambiente de produção, o deploy em cloud provaria que a
+aplicação sobe do zero, e isso o `docker compose up -d` já prova em um comando. Sem
+cloud, o pipeline não teria para onde publicar — sobraria como executor de lint e teste.
+Esses gates existem e rodam **um comando cada** (passos 9 a 14 acima). O CI
+automatizaria a chamada; não acrescentaria garantia nenhuma.
 
-Ambiente de **desenvolvimento apenas** — a POC é avaliada localmente.
+### O que o enunciado pede na entrega
+
+| Item                                                    | Status | Onde está                                                                          |
+| ------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------- |
+| Instruções de como rodar o projeto, no readme           | ✅     | [Do clone à validação](#do-clone-à-validação) — 14 passos, um comando cada         |
+| Artefatos: scripts de banco, dados de conexão, etc.     | ✅     | migrations versionadas, `npm run seed`, `seed:load`, credenciais e string no readme |
+| Projeto hospedado no git para avaliação                 | ✅     | repositório público no GitHub, `main` sincronizada                                  |
+
+### Como cada item avaliado se comprova
+
+| Item avaliado                        | Onde se comprova                                                                                          |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| Funcional e não funcional            | as duas tabelas acima — 18 de 20, com os 11 obrigatórios entregues                                        |
+| Boas práticas (SOLID, code-smells)   | domínio define a porta, infra implementa (ADR-02); `Either<L,R>` para erro esperado (ADR-05); um caso de uso, um `execute` |
+| Estrutura e organização              | camadas explícitas com a fronteira **enforçada por ESLint**, não por convenção — [Arquitetura](#arquitetura) |
+| Legibilidade                         | nome por papel (`*.service.ts`, `*.controller.ts`, `*.entity.ts`), código em inglês e mensagens em PT-BR (ADR-13), lint limpo |
+| Testes que garantem os requisitos    | três camadas, três perguntas diferentes — [Testes](#testes)                                               |
+| Documentação (commits, readme, ER)   | histórico em *conventional commits*, um por entrega; este readme e o [`api/README.md`](api/README.md); ER em [Modelagem](#modelagem) |
 
 <a id="testes"></a>
 
 ## Testes
 
-Os comandos são os **passos 12 a 14** de [Do clone à validação](#do-clone-à-validação).
-Aqui está o que cada camada prova — e por que são duas.
+Três camadas, três perguntas diferentes — e os **passos 12 a 14** de
+[Do clone à validação](#do-clone-à-validação), um comando cada.
 
-| Camada         | Comando            | Escala               | O que prova                                                                                                                                                                                                                                         |
-| -------------- | ------------------ | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Unitários**  | `npm test`         | 133 casos, 21 suítes | Regra de negócio isolada: máquina de estados da consulta, invariantes, quem pode o quê. Repositório in-memory implementando a mesma porta — **não toca o banco**, roda em segundos                                                                  |
-| **Integração** | `npm run test:e2e` | 153 casos, 10 suítes | Sobe o `AppModule` inteiro e bate no Postgres de verdade, via HTTP com Supertest. É a única camada que prova o que **só o banco** garante — e, desde a F6, que o documento OpenAPI não tem rota sem `summary`, sem exemplo ou sem o 401 documentado |
+| Camada         | Comando                | Escala               | Que pergunta responde                                                                              |
+| -------------- | ---------------------- | -------------------- | ---------------------------------------------------------------------------------------------------- |
+| **Unitários**  | `npm test`             | 133 casos, 21 suítes | "a regra está certa?" — máquina de estados, invariantes, quem pode o quê. Porta in-memory, **sem banco** |
+| **Integração** | `npm run test:e2e`     | 153 casos, 10 suítes | "o sistema inteiro entrega?" — `AppModule` + Supertest + Postgres real. Única camada que prova o que **só o banco** garante |
+| **Estresse**   | `npm run test:stress`  | 2 cenários, k6       | "sobrevive a concorrência e volume?" — [Prova sob estresse](#prova-sob-estresse)                   |
 
-A divisão não é cerimônia. Há garantias que nenhum teste unitário alcança, porque
-elas não estão no código — estão no schema:
+A divisão não é cerimônia. Há garantias que nenhum teste unitário alcança, porque não
+estão no código — estão no schema: o índice único parcial que fecha a corrida do slot
+(INV-01), o `CHECK` que recusa anotação vazia por `INSERT` direto, a FK
+`ON DELETE NO ACTION` que impede um script manual de sumir com registro clínico.
 
-- o índice único **parcial** que recusa dois agendamentos vivos no mesmo instante, e continua liberando o horário depois de um cancelamento (INV-01);
-- o `CHECK` que recusa uma anotação vazia mesmo por `INSERT` direto, por baixo da validação HTTP;
-- a FK `ON DELETE NO ACTION` que recusa apagar uma consulta que tem anotação — a rede que impede um script manual de sumir com registro clínico.
+Estratégia de teste em detalhe — o que cada camada monta, o que é vazamento de
+arquitetura: [`api/README.md`](api/README.md#testes).
 
-### O que estes testes ainda não provam
+<a id="prova-sob-estresse"></a>
 
-Nenhuma das duas camadas exercita **concorrência, volume ou retry**. Dito sem
-eufemismo: as rotas estão corretas e **não provadas sob estresse**.
+### Prova sob estresse
 
-| Não provado                                         | O que existe hoje                                                                                                                                                                                                             | Onde a prova vai |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| Duas requisições **simultâneas** no mesmo horário   | O índice único parcial acima está no banco desde a F4, e é a única defesa real contra a corrida. Testado está que ele **existe** e rejeita o segundo agendamento — não que ele resolve o empate de dois `INSERT` concorrentes | Sprint 06.01     |
-| `POST` repetido por retry criando recurso duplicado | Só o agendamento tem chave natural que barra o segundo (409 determinístico). Os demais `POST` não têm `Idempotency-Key`                                                                                                       | Sprint 06.01     |
-| Comportamento sob **volume**                        | Nenhum teste de carga. A busca de pacientes usa `ILIKE` sem índice de texto e a paginação é por `OFFSET` — escolhas dimensionadas para um consultório, não para volume                                                        | Sprint 06.01     |
+Um comando, com o stack de pé. Leva cerca de um minuto e não há passo extra — o
+`docker compose up -d` do passo 4 já deixa o k6 ocioso, e o comando resolve o seed de
+volume sozinho:
 
-Isto é escolha declarada, não esquecimento: a regra está em
-[`PLAN.md §3.2`](api/docs/PLAN.md) — sprint de feature entrega a regra, a sprint
-dedicada entrega a prova sob estresse. Cada limite acima tem entrada própria, com
-gatilho de reabertura, em
-[`DEBITOS-TECNICOS.md`](api/docs/DEBITOS-TECNICOS.md). Se a 06.01 não fechar até a
-entrega, esta tabela é o registro do que ficou sem prova.
+```bash
+cd api && npm run test:stress
+```
 
-> **Por que `docker exec` em vez de `npm test` direto.** O compose monta um volume
-> anônimo em `/usr/src/app/node_modules` para preservar as dependências da imagem, e
-> por isso **não existe `node_modules` no host** — `npm test` na raiz responde
-> `jest: not found`. Rodar no host é possível, mas só se `npm install` vier **antes**
-> do primeiro `docker compose up`: depois disso o daemon já criou o ponto de montagem
-> como `root`, e o `npm install` falha com `EACCES` até você apagar `api/node_modules`
-> com `sudo`. Dentro do container o problema não existe.
+| Cenário       | O que faz                                                                    | Resultado                                                                 |
+| ------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `overbooking` | 20 VUs disputam **o mesmo horário** do mesmo médico, com pacientes distintos | `created_201 count=1` · `conflict_409 count=19` · `checks rate=100.00%`   |
+| `load`        | 5 VUs por 30 s nas três listagens paginadas                                  | p95 de 11 a 18 ms nas três rotas, sobre 500 pacientes e 2.000 consultas   |
 
-> **Verde vale, mas confira a contagem.** O script é `jest --passWithNoTests`: se um
-> dia o jest não encontrar nenhum arquivo de teste, ele sai **com sucesso** em vez de
-> falhar. O output sempre diz quantas suítes rodaram — é esse número que confirma.
+Duas conclusões, e nenhuma delas é o milissegundo: **é o índice que fecha a corrida** —
+com ele removido, as mesmas 20 requisições criam **12** consultas no mesmo horário — e
+**nenhum débito de performance foi aberto**, porque os dois candidatos conhecidos
+(`ILIKE` sem índice de texto, paginação por `OFFSET`) foram medidos e não destoam.
+
+> Isto é **demonstração, não regressão**: nada dispara este comando sozinho, e um
+> `test:e2e` verde nunca deve ser lido como prova de concorrência.
+
+Metodologia, números por endpoint, condição da máquina e o procedimento de verificação
+com o índice removido: [**`api/test/stress/README.md`**](api/test/stress/README.md).
+
+**Retry ainda não tem prova, e é escolha declarada:** não há `Idempotency-Key`, então
+`POST /api/patients` repetido cria duas linhas (o agendamento é exceção — a chave
+natural transforma o retry em 409). O porquê e o gatilho de reabertura estão em
+**DEBT-05**, [`DEBITOS-TECNICOS.md`](api/docs/DEBITOS-TECNICOS.md).
 
 ## Arquitetura
 
-Cinco linhas, e nenhuma delas repetida de outro documento:
+Cinco linhas, e o documento inteiro logo abaixo:
 
 - **Camadas** — `domains/domain` (entities com comportamento, casos de uso, portas) ·
   `gateways/http` (controllers, schemas Zod) · `infrastructure` (TypeORM, migrations,
@@ -259,23 +285,23 @@ Cinco linhas, e nenhuma delas repetida de outro documento:
   O caso de uso não conhece TypeORM, Express, bcrypt nem JWT — e quem impede não é
   disciplina, é uma regra de ESLint que quebra o build.
 - **Agregados** — `Doctor`, `Patient`, `Appointment` (raiz, com a anotação dentro) e
-  `RefreshSession`. Eles se referenciam **por ID**, sem relação navegável entre si, e
-  uma transação toca um agregado só (ADR-04).
+  `RefreshSession`. Referenciam-se **por ID**, sem relação navegável entre si, e uma
+  transação toca um agregado só (ADR-04).
 - **DI é a do Nest**, com `*.module.ts` + `*.provider.ts`: o provider entrega o
   **adapter** que implementa a porta, nunca o `Repository<T>` cru (ADR-02).
 - **A entity é a do TypeORM**, com os métodos de regra dentro (ADR-03) — é ela que
   declara os nomes de constraint que o `migration:generate` usa.
 
-O documento de arquitetura é **[`api/README.md`](api/README.md)**: camadas em detalhe,
-injeção de dependência, contrato de erro, persistência e estratégia de teste. Nada
-disso é repetido aqui.
+Autoridade sobre arquitetura: **[`api/README.md`](api/README.md)** — camadas em
+detalhe, injeção de dependência, contrato de erro, persistência, ambiente de execução e
+estratégia de teste. Nada disso é repetido aqui.
 
 <a id="modelagem"></a>
 
 ## Modelagem
 
-Cinco tabelas, cinco chaves estrangeiras. O diagrama abaixo foi lido das **quatro
-migrations aplicadas** — não das entities: a migration é o que está no banco.
+Cinco tabelas, cinco chaves estrangeiras. O diagrama foi lido das **quatro migrations
+aplicadas** — não das entities: a migration é o que está no banco.
 
 ```mermaid
 erDiagram
@@ -338,26 +364,22 @@ erDiagram
 ```
 
 O que o desenho não mostra, e é onde mora a garantia:
+**`uk_appointments_doctor_slot`** é `UNIQUE (doctor_id, scheduled_at)` **`WHERE status
+<> 'CANCELLED'`** — é a segunda camada de INV-01, e é o `WHERE` que devolve o horário no
+cancelamento (passo 7). E **não há `DELETE` de paciente**: `anonymized_at` é o que
+"excluir" significa nesta tabela (ADR-10), porque apagar a linha quebraria a FK que
+preserva o histórico.
 
-- **`uk_appointments_doctor_slot`** é `UNIQUE (doctor_id, scheduled_at)` **`WHERE
-status <> 'CANCELLED'`**. É a segunda camada de INV-01 — a que fecha a corrida que
-  nenhum `if` fecha — e é o `WHERE` que devolve o horário no cancelamento (passo 7).
-- **Quatro das cinco FKs foram escritas à mão** na revisão das migrations: como
-  agregados se referenciam por ID (ADR-04), o gerador não tinha relação de onde
-  derivá-las. A única que ele emitiu sozinho é `consultation_notes → appointments`,
-  porque a anotação é entidade **interna** do agregado.
-- **`consultation_notes` não tem `doctor_id`**, de propósito: o escopo vem da raiz. Uma
-  segunda cópia poderia divergir e apontar para outro consultório.
-- **Não há `DELETE` de paciente**: `anonymized_at` é o que "excluir" significa nesta
-  tabela (ADR-10). Apagar a linha quebraria a FK que preserva o histórico.
-
-Inventário e decisões de modelagem: [`PRODUCT.md §banco`](api/docs/PRODUCT.md). O SQL
-literal está nas migrations, em `api/src/infrastructure/databases/typeorm/postgres/migrations/`.
+Autoridade sobre modelagem — inventário de tabelas, relacionamentos e as decisões de
+banco com o preço de cada uma: [`PRODUCT.md §banco`](api/docs/PRODUCT.md). O SQL literal
+está nas migrations, em `api/src/infrastructure/databases/typeorm/postgres/migrations/`.
 
 ## Decisões e limites
 
-**As decisões arquiteturais**, cada uma com alternativa rejeitada e preço declarado em
-[`PRODUCT.md §adrs`](api/docs/PRODUCT.md) — aqui vai o resumo de uma linha:
+**As ADRs.** Autoridade em [`PRODUCT.md §adrs`](api/docs/PRODUCT.md), onde cada uma tem
+alternativa rejeitada e preço declarado. A tabela abaixo é **duplicação consciente** —
+um resumo de uma linha existe aqui porque a decisão é o que o avaliador precisa ver numa
+passada, e mandá-lo abrir outro arquivo para isso custaria mais do que o drift:
 
 | ADR    | Decisão                                                                         |
 | ------ | ------------------------------------------------------------------------------- |
@@ -375,10 +397,11 @@ literal está nas migrations, em `api/src/infrastructure/databases/typeorm/postg
 | **12** | Somente ambiente de desenvolvimento — produção aqui seria cenografia            |
 | **13** | Código e banco em inglês; mensagem ao usuário em PT-BR                          |
 
-**E os limites.** O ledger completo, com severidade e **gatilho de reabertura** de
-cada um, está em [`DEBITOS-TECNICOS.md`](api/docs/DEBITOS-TECNICOS.md). Os que
-importam para quem está avaliando são estes quatro — os dois de severidade ALTA, e
-dois em que o roteiro acima esbarra:
+> Divergiu do `PRODUCT.md`? **`PRODUCT.md` vence**, e quem se corrige é esta tabela.
+
+**Os limites.** Autoridade em [`DEBITOS-TECNICOS.md`](api/docs/DEBITOS-TECNICOS.md),
+com severidade e **gatilho de reabertura** de cada um. Os quatro que importam para quem
+está avaliando — os dois ALTOS, e dois em que o roteiro acima esbarra:
 
 | Débito                            | O que é                                                                                                                                                                                                             |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -391,49 +414,21 @@ O que ficou de fora **por decisão**, e não por falta de tempo: produção e cl
 (ADR-12) · pipeline de CI (RNF-12) · Redis, filas e eventos de domínio · RBAC com
 múltiplos papéis (DEBT-08) · frontend.
 
-## Comandos
-
-| Comando                               | O que faz                                                                |
-| ------------------------------------- | ------------------------------------------------------------------------ |
-| `docker compose up -d` / `down`       | sobe / derruba o ambiente                                                |
-| `docker compose down -v`              | derruba **apagando o volume** — necessário para recriar `prontomed_test` |
-| `docker logs api-prontomed --tail 50` | logs da API                                                              |
-| `docker exec -it api-prontomed sh`    | shell dentro do container, para encadear vários `npm run`                |
-
-Os scripts abaixo rodam com `docker exec api-prontomed npm run <script>` — ou direto,
-de dentro de `api/`, se você tiver Node no host:
-
-| Script                               | O que faz                                                                       |
-| ------------------------------------ | ------------------------------------------------------------------------------- |
-| `lint` · `typecheck` · `build`       | gates de código                                                                 |
-| `test` · `test:e2e`                  | unitários · integração                                                          |
-| `seed`                               | cria o médico com a credencial do `.env` e a base de demonstração — idempotente |
-| `migration:run`                      | aplica as migrations no banco de **desenvolvimento**                            |
-| `migration:run:test`                 | as mesmas migrations no `prontomed_test` — o banco que o e2e usa                |
-| `migration:generate --name=<escopo>` | gera a migration a partir das entities, para **revisão** antes do commit        |
-| `migration:revert`                   | desfaz a última migration aplicada                                              |
-
 **Portas:** API em `3333`. Postgres em **`5433` no host** (dentro da rede Docker
 continua `5432`) — 5432 pode estar ocupada por outro projeto na mesma máquina.
 
-**Bancos:** `prontomed` (desenvolvimento) e `prontomed_test`, ambos no mesmo
-container. O `prontomed_test` é criado por `api/db/init-test-db.sh`, que o Postgres
-roda **só no primeiro boot do volume** — se ele não existir, `docker compose down -v`
-e suba de novo.
-
-**Migrations:** rodam por comando, nunca no boot — e são **dois** bancos, portanto
-dois comandos. O porquê disso e o fluxo de geração e revisão estão em
-[`api/README.md`](api/README.md#persistência).
-
 ## Documentação
 
-Cada assunto tem **um** dono; os outros documentos apontam para ele.
+Cada assunto tem **um** dono. Este README aponta; a autoridade decide.
 
-| Se você quer                                                                                   | Vá para                                                                  |
+| Se você quer                                                                                   | Autoridade                                                               |
 | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| Entender **como o backend é construído** — camadas, DI, contrato de erro, persistência, testes | [`api/README.md`](api/README.md)                                         |
-| Entender **o produto e o domínio** — personas, jornadas, agregados, invariantes, ADRs          | [`api/docs/PRODUCT.md`](api/docs/PRODUCT.md)                             |
+| **Exercitar a API**                                                                            | `/api/docs`, com o ambiente de pé                                        |
+| Entender **como o backend é construído** — camadas, DI, contrato de erro, persistência, ambiente de execução, testes | [`api/README.md`](api/README.md)                    |
+| Entender **o produto e o domínio** — personas, jornadas, agregados, invariantes, ADRs, banco   | [`api/docs/PRODUCT.md`](api/docs/PRODUCT.md)                             |
 | Ver o **plano de execução** — requisitos, fases na ordem, contratos HTTP, padrões de código    | [`api/docs/PLAN.md`](api/docs/PLAN.md)                                   |
 | Saber **o que ficou de fora e por quê**, com gatilho de reabertura                             | [`api/docs/DEBITOS-TECNICOS.md`](api/docs/DEBITOS-TECNICOS.md)           |
 | Acompanhar **como cada sprint foi executada** — decisões, issues, scores de review             | [`api/docs/desenvolvimento/sprints/`](api/docs/desenvolvimento/sprints/) |
-| **Exercitar a API**                                                                            | `/api/docs`, com o ambiente de pé                                        |
+| Entender a **prova sob estresse** — metodologia, números medidos, verificação ao contrário     | [`api/test/stress/README.md`](api/test/stress/README.md)                 |
+| Reexecutar o **roteiro de avaliação por máquina**                                              | [`api/test/roteiro-mcp-playwright/`](api/test/roteiro-mcp-playwright/)   |
+| Saber **como escrever doc** neste repositório                                                  | [`api/docs/DOC-STANDARDS.md`](api/docs/DOC-STANDARDS.md)                 |

@@ -1,13 +1,22 @@
 # Arquitetura do backend
 
-Documento **técnico**: camadas, injeção de dependência, contrato de erro,
-persistência e o que o lint garante. Como subir o projeto está no
-[README da raiz](../README.md); requisitos, agregados e invariantes estão em
-[`docs/PRODUCT.md`](docs/PRODUCT.md); as decisões e suas alternativas, em
-[`docs/PLAN.md`](docs/PLAN.md).
+Documento **técnico** e autoridade sobre **como o backend é construído**: camadas,
+injeção de dependência, contrato de erro, validação, persistência, ambiente de execução
+e estratégia de teste.
 
-> Este arquivo descreve o que **existe** no repositório hoje (F1 + OpenAPI). O que
-> ainda não foi construído está marcado como _(F2+)_.
+O que **não** mora aqui, e por quê — cada assunto tem um dono só:
+
+| Assunto                                                | Autoridade                                                                    |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| Subir o projeto e avaliá-lo em 10 passos               | [README da raiz](../README.md)                                                |
+| Personas, jornadas, agregados, invariantes, ADRs, banco | [`docs/PRODUCT.md`](docs/PRODUCT.md)                                          |
+| Requisitos, fases, contratos HTTP, padrões de código   | [`docs/PLAN.md`](docs/PLAN.md)                                                |
+| Débitos, com severidade e gatilho de reabertura        | [`docs/DEBITOS-TECNICOS.md`](docs/DEBITOS-TECNICOS.md)                        |
+| A prova sob estresse — método, números, condição       | [`test/stress/README.md`](test/stress/README.md)                              |
+
+> Este arquivo descreve o que **existe** no repositório hoje: F0 a F7 construídas
+> (autenticação, pacientes, agenda, anotações, Swagger executável, seed, provas sob
+> estresse). Estado por sprint em [`docs/PRODUCT.md §roadmap`](docs/PRODUCT.md).
 
 ---
 
@@ -18,7 +27,7 @@ distintos:
 
 | | O que resolve | Como aparece no código |
 | --- | --- | --- |
-| **Hexagonal** | Isolar a regra da tecnologia | O service depende de uma **porta** (interface); o `*.provider.ts` entrega o adapter TypeORM _(F2+)_ |
+| **Hexagonal** | Isolar a regra da tecnologia | O service depende de uma **porta** (interface); o `*.provider.ts` entrega o adapter TypeORM |
 | **DDD** | Definir a unidade de consistência | Agregados se referenciam **por ID**, e uma transação toca um só — a transação vive no adapter, nunca no service |
 
 A injeção de dependência é a do **Nest**: nenhum container próprio, nenhum
@@ -72,35 +81,38 @@ src/
 │
 ├─ domains/domain/            O NÚCLEO — sem framework de transporte, sem ORM
 │  ├─ model-entities/         entities + barril `index.ts` que os DataSource consomem
-│  ├─ repositories/           PORTAS (interfaces)                            (F2+)
-│  ├─ enums/                                                                 (F2+)
-│  └─ services/               casos de uso + `*.module.ts` + `*.provider.ts`  (F2+)
+│  ├─ repositories/           PORTAS (interfaces) — doctor, patient, appointment, refresh-token
+│  ├─ enums/                  status da consulta, sexo do paciente
+│  └─ services/               casos de uso + `*.module.ts` + `*.provider.ts`
+│     ├─ authentication/      login, refresh, logout, perfil
+│     ├─ patients/            cadastro, listagem, edição, anonimização LGPD
+│     └─ appointments/        agenda, cancelamento, anotações, linha do tempo
 │
 ├─ gateways/http/             A BORDA DE ENTRADA
-│  ├─ http.module.ts          controllers + APP_PIPE (+ APP_GUARD em F2)
+│  ├─ http.module.ts          controllers + APP_PIPE + APP_GUARD
 │  ├─ controllers/core/       health
-│  ├─ controllers/domain/                                                    (F2+)
-│  ├─ schemas/domain/         schemas Zod + DTOs via createZodDto            (F2+)
+│  ├─ controllers/domain/     authentication, patients, appointments
+│  ├─ schemas/domain/         schemas Zod + DTOs via createZodDto
 │  └─ pipes/                  zod-validation-pipe.ts
 │
 ├─ framework/                 PLUMBING do Nest
 │  ├─ filters/errors/         exception-filter.ts
-│  ├─ authentication/         guard, decorators                              (F2+)
-│  └─ cryptography/           adapters de PasswordHasher / TokenIssuer        (F2+)
+│  ├─ authentication/         JwtAuthGuard global, @Public(), @CurrentDoctor()
+│  └─ cryptography/           adapters de PasswordHasher / TokenIssuer
 │
 ├─ infrastructure/databases/typeorm/postgres/
 │  ├─ typeorm-database.datasource.ts   o DataSource do CLI
 │  ├─ database.providers.ts            o DataSource da aplicação
 │  ├─ database.module.ts               @Global + shutdown da conexão
-│  ├─ migrations/                      linha do tempo única                  (F2+)
-│  ├─ repositories/                    adapters que implementam as portas    (F2+)
-│  └─ seeds/                                                                 (F6)
+│  ├─ migrations/                      linha do tempo única — uma por sprint
+│  ├─ repositories/                    adapters que implementam as portas
+│  └─ seeds/                           demo.seed.ts (avaliação) · load.seed.ts (volume)
 │
-├─ presentation/presenters/   serialização de saída                          (F2+)
+├─ presentation/presenters/   serialização de saída — nada de entity crua na resposta
 └─ shared/
    ├─ constants/              tokens de DI
    ├─ errors/                 either.ts + types/ (DomainError com `code`)
-   ├─ interfaces/cryptography/ PORTAS de cripto                              (F2+)
+   ├─ interfaces/cryptography/ PORTAS de cripto
    └─ environments/           schema Zod do ambiente + EnvironmentService
 ```
 
@@ -229,19 +241,109 @@ migration aplicada nunca é editada; a correção é uma migration nova.
 
 ---
 
+<a id="ambiente-de-execução"></a>
+
+## Ambiente de execução
+
+O `docker-compose.yml` é **global** (raiz do repositório); o projeto NestJS mora em
+`api/`, que é o cwd de todo `npm run`. Três containers: `api-prontomed`, `db-prontomed`
+e `k6-prontomed` — este último ocioso até a [prova sob
+estresse](test/stress/README.md).
+
+**Portas:** API em `3333`; Postgres em **`5433` no host**, `5432` dentro da rede Docker
+— 5432 costuma estar ocupada por outro stack na mesma máquina.
+
+**Dois bancos, um container:** `prontomed` (desenvolvimento) e `prontomed_test` (e2e).
+O segundo é criado por `api/db/init-test-db.sh`, que o entrypoint do Postgres roda **só
+no primeiro boot do volume** — se ele não existir, `docker compose down -v` e suba de
+novo. A API só sobe depois que o banco passa no healthcheck (`depends_on:
+condition: service_healthy`), o que garante a ordem sem `sleep` no entrypoint.
+
+O healthcheck da API **não sonda o banco, de propósito** (`docs/PLAN.md §13 F0`):
+liveness e readiness são perguntas diferentes, e misturá-las faz um Postgres reiniciando
+derrubar um processo saudável. O preço é que a API sobe verde sem migrations e só
+quebra na primeira rota que tocar uma tabela.
+
+### Por que `docker exec` em vez de `npm run` direto
+
+O compose monta um volume **anônimo** em `/usr/src/app/node_modules` para preservar as
+dependências da imagem, que o bind mount do código sobreporia. Consequência: **não
+existe `node_modules` no host** — `npm test` responde `jest: not found`.
+
+Rodar no host é possível, mas só se `npm install` vier **antes** do primeiro
+`docker compose up`: depois disso o daemon já criou o ponto de montagem como `root`, e o
+`npm install` falha com `EACCES` até apagar `api/node_modules` com `sudo`. Dentro do
+container o problema não existe.
+
+### Scripts
+
+Todos rodam com `docker exec api-prontomed npm run <script>` — ou direto de `api/`, se
+houver Node no host.
+
+| Script | O que faz |
+| --- | --- |
+| `lint` · `typecheck` · `build` | gates de código |
+| `test` · `test:e2e` | unitários · integração — o e2e **migra o `prontomed_test` sozinho** antes de rodar |
+| `seed` | médico de avaliação + base de demonstração — idempotente, recusa `APP_ENV ≠ dev` |
+| `migration:run` | aplica as migrations no banco de **desenvolvimento** |
+| `migration:generate --name=sprint<NNMM>-<escopo>` | gera a migration a partir das entities, para **revisão** antes do commit |
+| `migration:revert` | desfaz a última migration aplicada |
+
+**A tabela lista o que se executa — e só.** O `package.json` tem dois scripts
+deliberadamente fora dela, porque nenhum é passo de ninguém: cada um é **degrau** de um
+comando que já está aqui.
+
+| Script interno | Quem o dispara | Por que existe separado |
+| --- | --- | --- |
+| `migration:run:test` | `test:e2e`, antes do Jest | O banco de teste é do e2e e de mais ninguém. Migrar por fora era um passo a mais para preparar um banco que o próprio comando sabe preparar — e esquecê-lo dava `relation does not exist` |
+| `seed:load` | `test:stress`, antes do k6 | O volume de carga é pré-condição do teste, não escolha do operador ([`test/stress/README.md`](test/stress/README.md)) |
+
+Os dois são **idempotentes**: a segunda execução não repete migration nem duplica
+volume, então acionar o comando de fora custa quase nada. É o que torna `test:e2e` e
+`test:stress` auto-contidos — rodam do zero, em qualquer ordem, quantas vezes se
+quiser.
+
+**Exceções à regra do `docker exec`:** `test:stress` roda **no host**, de dentro de
+`api/`, porque é orquestração — faz `docker exec` na API para o seed de volume e no k6
+para o teste ([`test/stress/README.md`](test/stress/README.md)). O roteiro por
+Playwright também roda no host, e pelo mesmo motivo invertido: o browser vive fora do
+container ([`test/roteiro-mcp-playwright/`](test/roteiro-mcp-playwright/)).
+
+> **Nunca `npx typeorm` direto** — sempre pelos scripts, que passam
+> `typeorm-ts-node-commonjs` e o `-d` correto.
+
+---
+
 ## Testes
+
+Três camadas, três perguntas. As duas primeiras são Jest e vivem neste diretório; a
+terceira é k6 e tem [documento próprio](test/stress/README.md).
 
 | Camada | Monta | Prova | Onde |
 | --- | --- | --- | --- |
 | **Unitário** | `TestingModule` com a porta sobrescrita por um in-memory | regra pura, sem banco | `*.spec.ts` ao lado do alvo |
-| **Integração** | `AppModule` inteiro + Supertest + Postgres real | rota → service → banco, incluindo constraints | `test/integration/*.e2e-spec.ts` |
+| **Integração** | `AppModule` inteiro + Supertest + Postgres real | rota → service → banco, incluindo constraints e o documento OpenAPI | `test/integration/*.e2e-spec.ts` |
+| **Estresse** | k6 contra a API de pé | corretude sob corrida e latência sob volume | `test/stress/` |
 
 Se um teste unitário precisar mockar `DataSource` ou o repositório concreto, isso é
 vazamento de arquitetura — conserta-se o código, não o teste.
 
-`test/factories/probe.controller.ts` é uma sonda: até F2 nenhuma rota de produção
-recebe corpo, e sem uma que receba não há como exercitar o `APP_PIPE` global nem a
-derivação Zod → OpenAPI. Ela vive em `test/`, fora do alcance do `nest build`.
+**A camada de integração é a única que prova o que só o banco garante:** o índice único
+parcial que fecha o slot (INV-01), o `CHECK` que recusa anotação vazia por `INSERT`
+direto, a FK `ON DELETE NO ACTION` que impede apagar consulta com anotação. Desde F6 ela
+também é gate do documento OpenAPI: nenhuma rota sem `summary`, sem exemplo ou sem o 401
+documentado.
+
+**`test/factories/probe.controller.ts` é uma sonda**, e continua necessária mesmo com a
+API completa: ela dá ao e2e um DTO simples e **estável** para exercitar o `APP_PIPE`
+global (400 com `details[]`) e a derivação Zod → OpenAPI, sem amarrar esses testes ao
+corpo de uma rota de produção que muda por outro motivo. É `@Public()` porque existe
+para provar **pipe e filtro** — sem isso, os testes de envelope passariam a provar o
+guard. Vive em `test/`, fora do alcance do `nest build`: não chega a produção.
+
+> **Verde vale, mas confira a contagem.** O script é `jest --passWithNoTests`: se um dia
+> o jest não encontrar nenhum arquivo de teste, ele sai **com sucesso** em vez de
+> falhar. O output sempre diz quantas suítes rodaram — é esse número que confirma.
 
 ---
 

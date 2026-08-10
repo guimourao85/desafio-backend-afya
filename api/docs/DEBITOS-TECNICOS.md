@@ -84,6 +84,16 @@ de quem consome a API. Em cookie `httpOnly` ele seria invisível a JavaScript.
 Não há header `Idempotency-Key`: dois `POST` idênticos criam dois recursos, exceto
 onde o banco já tem chave única para barrar o segundo.
 **Por que fica assim:** o agendamento tem chave natural única `(doctor_id, scheduled_at)` — um retry produz 409 determinístico, nunca duplicata (idempotência efetiva). Para os demais POSTs, o ganho não paga a mecânica de armazenar e expirar chaves.
+**Reconfirmado em 10/08/2026 — não reduzido, não fechado.** A sprint 06.01 desenhou a
+solução inteira (tabela `idempotency_keys`, migration, porta, adapter, módulo,
+interceptor, header, TTL, invariante e ADR), passou por fricção PRÉ com os quatro
+agentes, e então **cortou tudo**: a releitura do PDF do desafio não achou uma linha
+pedindo idempotência — nem requisito funcional, nem não-funcional, nem item de
+avaliação. Era a maior superfície da sprint para o único item sem base no enunciado
+(sub-doc 06.01, decisão 15). Dois achados da fricção sobrevivem como parte do
+rationale: `response_body` guardaria uma **segunda cópia de PII** fora do alcance da
+anonimização (D1), e o desenho record-after-success **perde a corrida da própria
+chave** (C1) — entregaria mecanismo não pedido com limite conhecido.
 **Gatilho de reabertura:** cliente com retry automático criando recursos sem chave natural.
 
 ### DEBT-06 · BAIXO · segurança
@@ -150,8 +160,8 @@ está gravado dentro dele. Subir `BCRYPT_ROUNDS` para 12 acelera só o caminho
 ### DEBT-15 · MÉDIO · privacidade
 **A listagem enumera os pacientes anonimizados, e o que sobra na linha ainda aponta para uma pessoa.**
 `GET /api/patients` devolve as linhas anonimizadas junto com as ativas, pelo mesmo
-presenter e com o `id` no payload (`list-patients.controller.ts:72` ·
-`patient.presenter.ts:30`). Pior: `?search=anonimizado` casa com o rótulo
+presenter e com o `id` no payload (`list-patients.controller.ts` não filtra
+anonimizados; `patient.presenter.ts:30` publica o `id`). Pior: `?search=anonimizado` casa com o rótulo
 `"Paciente anonimizado"` e vira um filtro acidental para exatamente esse conjunto.
 Cada linha ainda carrega `sex`, `heightM`, `weightKg`, e a timeline entrega as datas
 de todas as consultas. Numa base de consultório com dezenas de pacientes, essa

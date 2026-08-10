@@ -160,10 +160,15 @@ nomeado ([PLAN.md §12.4](PLAN.md)).
 > **O que "testado" quer dizer aqui.** Teste nomeado prova que a regra **existe** e
 > que ela rejeita o caso que deve rejeitar. Ele **não** prova comportamento sob
 > corrida, volume ou retry — essa classe de prova é da sprint 06.01, por regra de
-> escopo declarada em [PLAN.md §3.2](PLAN.md). Vale para todas as sete, e pesa
-> especialmente na **INV-01**: o índice único parcial é a única defesa real contra
-> duas requisições simultâneas, e ele está no banco desde F4 — **exercitado por
-> teste concorrente, ainda não**.
+> escopo declarada em [PLAN.md §3.2](PLAN.md). Vale para todas as sete.
+>
+> **A exceção é a INV-01, e ela fechou em 10/08/2026.** O índice único parcial é a
+> única defesa real contra duas requisições simultâneas, e agora está **exercitado
+> sob corrida**: 20 requisições no mesmo slot produzem `1× 201` e `19× 409`, e com o
+> índice removido do banco as mesmas 20 criam **12** consultas. A prova vive em
+> `npm run test:stress` — comando manual, **demonstração e não regressão**: nada a
+> dispara sozinha, e `npm run test:e2e` verde continua não sendo prova de
+> concorrência.
 
 | ID         | Invariante                                                                                     | Enforcement                                                                   | HTTP    |
 | ---------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------- |
@@ -204,7 +209,7 @@ quando não pode.
 | Recurso de outro médico, ou inexistente      | 404 `RESOURCE_NOT_FOUND`      | "Paciente não encontrado." / "Agendamento não encontrado."         |
 | Campo com formato inválido, no corpo ou na query | 400 `VALIDATION_ERROR`    | "Requisição inválida." + `details[]` por campo                     |
 | **`:id` de caminho fora do formato UUID**    | 400 `VALIDATION_ERROR`        | "Requisição inválida." — **sem `details`**: o pipe global valida `@Param` também, e aí não há campo de formulário a apontar |
-| Refresh inexistente, expirado ou já revogado | 401 `INVALID_REFRESH_TOKEN`   | "Sessão expirada. Faça login novamente."                           |
+| Refresh inexistente, expirado, revogado ou que nunca foi um refresh | 401 `INVALID_REFRESH_TOKEN`   | "Refresh token inválido ou sessão expirada. Faça login novamente." — uma mensagem só, sem afirmar causa: distinguir seria oráculo |
 | Excluir paciente já anonimizado              | 204                           | — (idempotente: não é erro)                                        |
 | Cancelar agendamento já cancelado            | 204                           | — (idempotente)                                                    |
 | Logout com token desconhecido                | 204                           | — (logout nunca falha)                                             |
@@ -258,6 +263,8 @@ doctors ─┬─< patients ─────< appointments >─── (doctor_id)
 | **`timestamptz`** para instante; `date` puro só em `birth_date`                                        | Nascimento não tem fuso                                                                                                                                                  |
 | **Migration gerada por `migration:generate`, revisada e comitada**; `synchronize: false`; forward-only | O schema sai das entities, mas quem aprova é humano. A entity declara os nomes (`pk_`, `uk_`, `ck_`, `where` do índice parcial); sem isso o gerador inventa `UQ_a1b2c3…` |
 | **`migrationsRun: false`** — migration roda por comando, nunca no boot                                 | Schema mudando sozinho ao subir container é a mesma doença do `synchronize`, com outro nome                                                                              |
+| **Quatro das cinco FKs são escritas à mão** na revisão da migration                                    | Agregados se referenciam por ID (ADR-04), então não há `@ManyToOne` de onde o gerador as derive. A única que ele emite sozinho é `consultation_notes → appointments`, porque a anotação é entidade **interna** do agregado (`PLAN.md §16.4`) |
+| **`consultation_notes` não tem `doctor_id`**                                                           | O escopo vem da raiz do agregado. Uma segunda cópia poderia divergir e apontar para outro consultório — a integridade passaria a depender de as duas concordarem         |
 
 <!-- /§banco -->
 
@@ -307,7 +314,7 @@ sub-doc de sprint. Esta tabela é a única amarração canônica sprint ↔ fase
 | 04.02  | F5          | `appointments`: anotações e linha do tempo do paciente                                              | [sprint-04.02](desenvolvimento/sprints/sprint-04.02-anotacoes.md)          | ✅     |
 | 05.01  | F6          | Swagger: 400 e 401 por decorator, exemplos de corpo executáveis, seed de demonstração idempotente e gate do documento OpenAPI | [sprint-05.01](desenvolvimento/sprints/sprint-05.01-swagger-e-seed.md)     | ✅     |
 | 05.02  | F7          | README para o avaliador e ER — **sem CI** (RNF-12 cortado, `PLAN.md §3.1`)                          | [sprint-05.02](desenvolvimento/sprints/sprint-05.02-readme-e-er.md)        | ✅     |
-| 06.01  | —           | **Provas sob estresse:** concorrência no slot (ADR-09), idempotência (DEBT-05) e carga             | [sprint-06.01](desenvolvimento/sprints/sprint-06.01-concorrencia-idempotencia-e-carga.md) | ⬜     |
+| 06.01  | —           | **Provas sob estresse:** concorrência no slot provada sob 20 VUs e verificada com o índice removido (ADR-09 / INV-01) · carga medida (p95/p99 sobre 500 pacientes e 2.000 consultas, sem débito aberto) — idempotência **cortada** na releitura do PDF (sub-doc, decisão 15; DEBT-05 reconfirmado) | [sprint-06.01](desenvolvimento/sprints/sprint-06.01-concorrencia-idempotencia-e-carga.md) | ✅     |
 
 **Legenda:** ⬜ não iniciada · 🟨 em andamento · ✅ verde (`lint` + `build` + `test`).
 
@@ -322,7 +329,8 @@ sub-doc de sprint. Esta tabela é a única amarração canônica sprint ↔ fase
 
 - **06.01** — a transversal das provas sob estresse. Não tem fase porque não entrega
   feature: entrega a **prova** de que features já entregues sobrevivem a
-  concorrência, volume e retry. Decisão do usuário em 09/08/2026 para o teste
+  concorrência e volume — retry ficou fora do escopo na releitura do PDF
+  (sub-doc, decisão 15; DEBT-05 reconfirmado). Decisão do usuário em 09/08/2026 para o teste
   concorrente do slot, estendida a toda a classe de prova em 10/08/2026.
   **A regra que a governa é [PLAN.md §3.2](PLAN.md)** — sprint de feature entrega a
   regra, a 06.01 entrega a prova. Esta linha não a repete: aponta.
