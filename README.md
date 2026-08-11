@@ -180,7 +180,7 @@ histórico para preservar quando o paciente é anonimizado.
 | **RNF-02** | Node.js (JavaScript ou TypeScript)                        | Obrigatório | ✅     | Node 22 + TypeScript strict                                                                      |
 | **RNF-03** | Documentação da API gerada                                | Obrigatório | ✅     | `/api/docs`, gerado dos **schemas Zod** (`nestjs-zod`) — fonte única (ADR-07)                    |
 | **RNF-04** | Dados validados na inserção/atualização                   | Obrigatório | ✅     | Zod na borda + invariantes no domínio + `CHECK`/`UNIQUE` no banco (três camadas)                 |
-| **RNF-05** | Testes unitários e/ou de integração                       | Obrigatório | ✅     | as duas camadas, e uma terceira — [**Testes**](#testes)                                          |
+| **RNF-05** | Testes unitários e/ou de integração                       | Obrigatório | ✅     | as duas camadas — [**Testes**](#testes)                                          |
 | **RNF-06** | Documentação da modelagem do banco (ER)                   | Desejável   | ✅     | [**Modelagem**](#modelagem)                                                                      |
 | **RNF-07** | MySQL ou PostgreSQL, com ou sem ORM                       | Desejável   | ✅     | PostgreSQL 16 + TypeORM, migrations geradas e revisadas à mão                                    |
 | **RNF-08** | Setup de ambiente com docker/docker-compose               | Desejável   | ✅     | `docker compose up -d` sobe API e banco; Docker é o único pré-requisito   |
@@ -193,14 +193,14 @@ histórico para preservar quando o paciente é anonimizado.
 localmente (ADR-12): sem ambiente de produção, o deploy em cloud provaria que a
 aplicação sobe do zero, e isso o `docker compose up -d` já prova em um comando. Sem
 cloud, o pipeline não teria para onde publicar — sobraria como executor de lint e teste.
-Esses gates existem e rodam **um comando cada** (passos 9 a 14 acima). O CI
+Esses gates existem e rodam **um comando cada** (passos 9 a 13 acima). O CI
 automatizaria a chamada; não acrescentaria garantia nenhuma.
 
 ### O que o enunciado pede na entrega
 
 | Item                                                    | Status | Onde está                                                                          |
 | ------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------- |
-| Instruções de como rodar o projeto, no readme           | ✅     | [Do clone à validação](#do-clone-à-validação) — 14 passos, um comando cada         |
+| Instruções de como rodar o projeto, no readme           | ✅     | [Do clone à validação](#do-clone-à-validação) — 13 passos, um comando cada         |
 | Artefatos: scripts de banco, dados de conexão, etc.     | ✅     | migrations versionadas, `npm run seed`, credenciais e string de conexão no readme |
 | Projeto hospedado no git para avaliação                 | ✅     | repositório público no GitHub, `main` sincronizada                                  |
 
@@ -212,7 +212,7 @@ automatizaria a chamada; não acrescentaria garantia nenhuma.
 | Boas práticas (SOLID, code-smells)   | domínio define a porta, infra implementa (ADR-02); `Either<L,R>` para erro esperado (ADR-05); um caso de uso, um `execute` |
 | Estrutura e organização              | camadas explícitas com a fronteira **enforçada por ESLint**, não por convenção — [Arquitetura](#arquitetura) |
 | Legibilidade                         | nome por papel (`*.service.ts`, `*.controller.ts`, `*.entity.ts`), código em inglês e mensagens em PT-BR (ADR-13), lint limpo |
-| Testes que garantem os requisitos    | três camadas, três perguntas diferentes — [Testes](#testes)                                               |
+| Testes que garantem os requisitos    | duas camadas, duas perguntas diferentes — [Testes](#testes)                                               |
 | Documentação (commits, readme, ER)   | histórico em *conventional commits*, um por entrega; este readme e o [`api/README.md`](api/README.md); ER em [Modelagem](#modelagem) |
 
 <a id="testes"></a>
@@ -410,6 +410,15 @@ continua `5432`) — 5432 pode estar ocupada por outro projeto na mesma máquina
 ## Documentação
 
 Cada assunto tem **um** dono. Este README aponta; a autoridade decide.
+
+> **Sobre o volume de `api/docs/`.** Ela é a base de governança que dirigiu a construção
+> desta POC **com IA**: o plano de execução, o produto e o domínio, o ledger de débitos,
+> o contexto de cada agente de review e o registro de cada sprint. Existe porque foi
+> **usada** — é o que manteve decisão rastreável e escopo sob controle ao longo de sete
+> fases, e é onde cada corte está declarado com o seu preço.
+>
+> **Leitura recomendada, nunca obrigatória.** Nada em `docs/` é pré-requisito para
+> subir, avaliar ou entender a API: os passos acima e o `/api/docs` bastam.
 
 | Se você quer                                                                                   | Autoridade                                                               |
 | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
