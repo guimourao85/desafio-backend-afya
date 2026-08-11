@@ -52,7 +52,11 @@ function report(step, ok, detail) {
 }
 
 (async () => {
-  const browser = await chromium.launch();
+  // Headless por padrão — é ferramenta, e ninguém quer uma janela abrindo sozinha.
+  // `HEADED=1 npm run roteiro` abre o navegador e desacelera os cliques, para quem
+  // quiser assistir o roteiro sendo executado em vez de ler o `PASS`/`FAIL`.
+  const headed = Boolean(process.env.HEADED);
+  const browser = await chromium.launch({ headless: !headed, slowMo: headed ? 400 : 0 });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1200 } });
   page.setDefaultTimeout(20000);
 
