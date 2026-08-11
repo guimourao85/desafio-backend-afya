@@ -96,8 +96,10 @@ instante*. Enforcement em **duas camadas**, e as duas são obrigatórias:
 
 > **O teste de concorrência não é desta sprint** (decisão do usuário, 09/08/2026 —
 > `PLAN.md §13 F4`). A **regra** entra inteira aqui, com as duas camadas; a **prova
-> sob corrida** vai para a sprint 06.01, junto de idempotência e carga. O índice já
-> fecha a corrida desde hoje: o que falta é o teste que a exercita.
+> sob corrida** fica para depois. O índice já fecha a corrida desde hoje: o que falta
+> é o teste que a exercita.
+>
+> *(Ele existe desde 10/08/2026, em `test/integration/appointments.e2e-spec.ts`.)*
 
 ### Assinaturas fixadas
 
@@ -233,10 +235,10 @@ agregado e é caro de desfazer.
 | --- | --- |
 | Anotações (`consultation_notes`, `addNote`, `@OneToMany`) | **04.02 (F5)** |
 | `GET /api/patients/:id/appointments` (linha do tempo) | 04.02 (F5) |
-| **Teste de duas requisições concorrentes no mesmo slot** | **06.01** — decisão do usuário; a regra fica, a prova sob corrida sai |
+| **Teste de duas requisições concorrentes no mesmo slot** | **fora desta sprint** — decisão do usuário; a regra fica, a prova sob corrida sai. Hoje em `appointments.e2e-spec.ts` |
 | Sobreposição por duração (consulta como intervalo) | DEBT-02 |
 | Fuso do consultório | DEBT-10 |
-| `Idempotency-Key` no POST | DEBT-05 · 06.01 |
+| `Idempotency-Key` no POST | **DEBT-05** |
 <!-- /§objetivo -->
 
 ---
@@ -248,7 +250,7 @@ agregado e é caro de desfazer.
 | --- | --- | --- | --- | --- |
 | 1 | INV-01 em duas camadas | Verificação no caso de uso **e** índice único parcial | O caso de uso dá 409 com mensagem humana; o índice fecha a corrida que a verificação não fecha. Nenhuma das duas é redundante — elas cobrem falhas diferentes | Só a verificação (perde a corrida) · só o índice (mensagem vinda do tradutor de erro do banco) |
 | 2 | O `where` do índice | `status <> 'CANCELLED'`, **conferido no SQL gerado** | Sem ele o índice é único total: cancelar não liberaria o horário, e reagendar para lá responderia 409 para sempre. Compila igual — só o SQL denuncia | Índice único total + filtrar cancelados na aplicação: a corrida volta |
-| 3 | Teste de concorrência | **Fora desta sprint** (06.01) | Decisão do usuário em 09/08/2026, registrada em `PLAN.md §13 F4`. A regra e o índice entram inteiros; o que sai é o teste mais frágil da suíte, que vai junto de idempotência e carga | Entregar sem o índice também: aí a regra não existiria |
+| 3 | Teste de concorrência | **Fora desta sprint** | Decisão do usuário em 09/08/2026, registrada em `PLAN.md §13 F4`. A regra e o índice entram inteiros; o que sai é o teste mais frágil da suíte | Entregar sem o índice também: aí a regra não existiria |
 | 4 | Dado de paciente | **`FindPatientSummaryService`**, injetado do `PatientsModule` | É a API pública do módulo (`PRODUCT.md §dominios`), criada em 03.01 exatamente para isto. Ela já devolve 404 para inexistente **e** para alheio — INV-04 vem de graça | Injetar `PATIENTS_REPOSITORY` ou `JOIN` em `patients`: fura o agregado e cria a dependência que a fronteira existe para impedir |
 | 5 | Agendar para paciente anonimizado | **422** `BUSINESS_RULE_VIOLATION` (INV-02) | `PRODUCT.md §regras` fixa o texto: "Paciente anonimizado (LGPD) não pode receber novos agendamentos." O paciente existe — recusar com 404 mentiria | 404: esconderia a razão real |
 | **6** | Os guardas de estado | Na **entity**: `rescheduleTo()` e `complete()` devolvem `Either`; `cancel()` é `void` e idempotente | Regra sobre o próprio estado mora na entity (mesma razão de `Patient.anonymize()`). `cancel()` não devolve erro porque cancelar cancelado é no-op — 204 nas duas | Guardas no caso de uso: a entity vira saco de setters, e a máquina de estados se espalha por três services |
@@ -422,7 +424,7 @@ agregado e é caro de desfazer.
 - [x] Máquina de estados com spec próprio da entity
 - [x] **INV-03 exercitada**: anonimizar paciente com agenda não muda a contagem de consultas
 - [x] Nenhum registro compartilhado entre casos
-- [x] Declarado no doc que o teste concorrente é de 06.01 — não marcado como coberto
+- [x] Declarado no doc que o teste concorrente é de fora desta sprint — não marcado como coberto
 
 **Plano**
 - [x] `PLAN.md §11.3` corrigido (decisão 7)

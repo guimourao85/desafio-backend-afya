@@ -18,13 +18,8 @@ export interface AppointmentPage {
 }
 
 /**
- * O filtro da linha do tempo (RF-06).
- *
- * `doctorId` é **obrigatório**, e não opcional como em `AppointmentFilters`: a nota
- * não tem coluna `doctor_id` própria (por decisão — uma denormalização aqui poderia
- * divergir da raiz), então o único lugar onde INV-04 pode ser enforçada nesta
- * leitura é o filtro da **raiz**. Deixá-lo opcional abriria a porta para uma chamada
- * que devolve a agenda de outro consultório com as anotações junto.
+ * A nota não tem `doctor_id` próprio, então o escopo por médico só pode ser
+ * enforçado no filtro da raiz — por isso `doctorId` aqui é obrigatório.
  */
 export interface PatientTimelineFilters {
   doctorId: string;
@@ -33,66 +28,28 @@ export interface PatientTimelineFilters {
   perPage: number;
 }
 
-/**
- * A porta de persistência da agenda. `doctorId` em **todo** método que recebe um
- * identificador cru — a agenda de um médico não é alcançável a partir do token de
- * outro. A única exceção é `appendNotes`, e ela é explicada lá: o argumento já é
- * a raiz escopada, então o escopo viaja no objeto em vez de num parâmetro.
- */
+/** `doctorId` em todo método que recebe um id cru — a exceção é `appendNotes`. */
 export interface AppointmentRepository {
   create(appointment: Appointment): Promise<Appointment>;
 
   save(appointment: Appointment, doctorId: string): Promise<Appointment>;
 
   /**
-   * Grava as anotações **novas** da raiz — as que `addNote()` acrescentou e que
-   * ainda não têm identidade. Operação atômica do agregado, transação no adapter
-   * (ADR-04).
-   *
-   * Nome estreito de propósito. A versão larga — `save(raiz)` deixando o
-   * `cascade` do TypeORM cuidar das filhas — foi tentada e **quebra**: ao salvar uma
-   * raiz cuja coleção `@OneToMany` está carregada, o TypeORM trata a lista como o
-   * estado completo e desassocia (`SET NULL`) o que não estiver nela. Com uma raiz
-   * lida sem `relations`, isso significa apagar a referência das anotações já
-   * gravadas — `null value in column "appointment_id" violates not-null constraint`,
-   * verificado no e2e. O `NOT NULL` foi a rede; sem ele o dano seria silencioso.
-   *
-   * **Sem `doctorId`, e isso é deliberado.** Os outros métodos o exigem porque
-   * recebem um `id` cru, que qualquer string satisfaz; aqui o argumento **é a raiz
-   * já escopada** — só se obtém uma por `findByIdForDoctor`, `findByIdWithNotes` ou
-   * `create`. O escopo viaja no objeto, e um parâmetro repetindo
-   * `appointment.doctorId` seria proteção decorativa.
+   * Grava só as anotações novas da raiz. **Sem `doctorId` de propósito:** o argumento
+   * já é uma raiz escopada — só se obtém uma pelos `find*` daqui —, e repetir
+   * `appointment.doctorId` num parâmetro seria proteção decorativa.
    */
   appendNotes(appointment: Appointment): Promise<Appointment>;
 
-  /**
-   * A raiz **sem** as anotações — a leitura de quem vai mudar o estado da consulta
-   * ou acrescentar uma nota.
-   *
-   * Anotar não precisa das anteriores: `addNote` funciona com a lista indefinida, e
-   * nenhuma escrita da raiz toca as notas — não há `cascade`; `save` atualiza só
-   * colunas da própria consulta e `appendNotes` insere apenas as novas.
-   * Carregá-las aqui faria um `PATCH` de reagendamento puxar o prontuário inteiro
-   * para reescrever uma coluna.
-   */
+  /** A raiz **sem** as anotações: reagendar não precisa puxar o prontuário inteiro. */
   findByIdForDoctor(id: string, doctorId: string): Promise<Appointment | null>;
 
-  /**
-   * A raiz **com** as anotações, da mais antiga para a mais nova — a leitura do
-   * detalhe da consulta.
-   *
-   * Método separado, e não um parâmetro booleano em `findByIdForDoctor`: quem chama
-   * declara o que precisa, e o custo do `JOIN` fica visível no nome.
-   */
+  /** A raiz **com** as anotações. Método separado, e não um booleano: o `JOIN` fica no nome. */
   findByIdWithNotes(id: string, doctorId: string): Promise<Appointment | null>;
 
   /**
-   * INV-01, primeira camada: a consulta **viva** do médico exatamente neste
-   * instante, se existir.
-   *
-   * `ignoreId` existe para o reagendamento: sem ele, mover uma consulta para o
-   * horário em que ela já está encontraria a si mesma e responderia 409 — a
-   * requisição mais inofensiva possível virando conflito.
+   * A consulta viva neste instante, se existir (INV-01, primeira camada). `ignoreId`
+   * evita que um reagendamento para o próprio horário encontre a si mesmo e dê 409.
    */
   findActiveBySlot(
     doctorId: string,
@@ -102,12 +59,6 @@ export interface AppointmentRepository {
 
   list(filters: AppointmentFilters): Promise<AppointmentPage>;
 
-  /**
-   * A linha do tempo do paciente (RF-06): consultas do mais recente para trás, cada
-   * uma já com suas anotações.
-   *
-   * Contrato de performance, não só de dados: **uma leitura**, nunca uma por
-   * consulta. É a primeira rota do projeto onde um N+1 é possível.
-   */
+  /** Linha do tempo: do mais recente para trás, com as anotações. Uma leitura, nunca N+1. */
   listByPatientWithNotes(filters: PatientTimelineFilters): Promise<AppointmentPage>;
 }

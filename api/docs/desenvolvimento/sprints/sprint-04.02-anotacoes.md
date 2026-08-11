@@ -60,9 +60,9 @@ possível.
 | Editar ou apagar anotação                     | não pedido pelo enunciado; nenhuma fase — corte declarado (decisão 6) |
 | `GET /api/appointments/:id/notes`             | cortado em `PLAN.md §3.1` — o detalhe da consulta já devolve as anotações (decisão 1) |
 | Seed com as consultas e anotações do wireframe | F6 / sprint 05.01 |
-| Teste de duas anotações simultâneas           | sprint 06.01 (rigor) |
+| Teste de duas anotações simultâneas           | fora de escopo — não há unicidade a defender (edge 15) |
 | Anonimizar o **conteúdo** da anotação         | **DEBT-01** — e ele **não é trabalho pendente**: o enunciado pede *"mantendo o histórico de consulta"*, então apagar o texto quebraria o requisito. Ver o débito |
-| `Idempotency-Key` em requisição HTTP          | **DEBT-05** / sprint 06.01 — o `demo.seed.ts` virou idempotente nesta sprint (issue 9), mas é script de terminal, não rota |
+| `Idempotency-Key` em requisição HTTP          | **DEBT-05** — o `demo.seed.ts` virou idempotente nesta sprint (issue 9), mas é script de terminal, não rota |
 | Recusar anotação em paciente anonimizado | fora — inventaria uma quarta operação em INV-02 que o enunciado não pede (decisão 4 mantida) |
 | Enumeração de anonimizados na listagem | **DEBT-15**, aberto e MÉDIO |
 
@@ -229,7 +229,7 @@ nenhuma coluna `doctor_id` (decisão 9).
 | 12  | Consulta sem anotações dentro da timeline                     | `"notes": []`, nunca `null` nem campo ausente                     | presenter + e2e                    |
 | 13  | Anonimizar paciente que tem anotações                         | anotações **preservadas**, contagem idêntica antes e depois (INV-03) | e2e que conta antes e depois    |
 | 14  | Timeline de paciente com N consultas e M anotações            | **uma** query com `relations`, nunca 1+N                          | spec com contador de query / revisão do adapter |
-| 15  | Concorrência: duas anotações simultâneas na mesma consulta    | ambas gravam — não há unicidade a defender aqui                   | sprint 06.01 (fora desta)          |
+| 15  | Concorrência: duas anotações simultâneas na mesma consulta    | ambas gravam — não há unicidade a defender aqui                   | fora desta sprint                  |
 | 16  | Cancelar consulta que já tem anotações                        | cancela; anotações permanecem legíveis pelo detalhe               | e2e                                |
 
 <!-- /§edge-cases -->
@@ -343,7 +343,7 @@ fricção PÓS existir mesmo quando a PRÉ fecha 9/10 em todos os agentes.
 | 7   | **`examples` do Swagger aninhado dentro de `schema` não renderiza no Swagger UI** — MÉDIO | No OpenAPI 3 o `examples` é irmão do `schema` dentro do media type, não filho. Aninhado errado, o `/api/docs-json` continua saindo válido e a rota simplesmente não mostra exemplo — falha silenciosa, e o Swagger é a ferramenta de avaliação (`PLAN.md §14.3`) | Trocado `schema:` por `content: { 'application/json': { examples } }`; conferido no `/api/docs-json` | `update-appointment.controller.ts` | corrigido na sprint |
 | 8   | **O anonimizado continua enumerável na listagem, e `?search=anonimizado` virou filtro acidental para ele** — com `sex`, `heightM`, `weightKg` e as datas das consultas na mão, o médico reidentifica de memória — MÉDIO | A anonimização foi desenhada olhando a linha (quais colunas apagar) e não o conjunto (o que sobra quando N linhas idênticas ficam lado a lado). O rótulo `"Paciente anonimizado"` foi escolhido para manter a linha legível — e legibilidade num `ILIKE` é filtro | Decisão do usuário em 10/08/2026: fica como está, porque a listagem é a prova visual do RF-08 para o Avaliador → **DEBT-15**, MÉDIO, aberto | nenhum arquivo de código; `DEBITOS-TECNICOS.md` | débito declarado |
 
-| 9   | **`npm run seed` saía com código 1 na segunda execução** (`uk_doctors_email`) — MÉDIO | O script foi escrito não-idempotente **de propósito**, sob a decisão de 07/08/2026 de não tratar idempotência fora da sprint dedicada. A decisão tratava "requisição HTTP" e "script de terminal" como um assunto só — e eles têm custos muito diferentes | Decisão do usuário em 10/08/2026 revogando a regra **só para scripts**: o seed passou a reconfirmar a credencial do `.env` em vez de falhar. `Idempotency-Key` (DEBT-05) segue na 06.01 | `demo.seed.ts` + `test/integration/seed.e2e-spec.ts` (novo, 4 casos) + README passo 7 | corrigido na sprint |
+| 9   | **`npm run seed` saía com código 1 na segunda execução** (`uk_doctors_email`) — MÉDIO | O script foi escrito não-idempotente **de propósito**, sob a decisão de 07/08/2026 de não tratar idempotência fora da sprint dedicada. A decisão tratava "requisição HTTP" e "script de terminal" como um assunto só — e eles têm custos muito diferentes | Decisão do usuário em 10/08/2026 revogando a regra **só para scripts**: o seed passou a reconfirmar a credencial do `.env` em vez de falhar. `Idempotency-Key` (DEBT-05) segue aberto | `demo.seed.ts` + `test/integration/seed.e2e-spec.ts` (novo, 4 casos) + README passo 7 | corrigido na sprint |
 
 **Achados da fricção final da sprint 04** (10/08/2026) — todos de **documentação**;
 nenhuma pendência de código restou em F4 ou F5. Vêm depois do fechamento porque a

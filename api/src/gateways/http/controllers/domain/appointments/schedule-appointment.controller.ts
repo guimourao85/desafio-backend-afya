@@ -1,14 +1,5 @@
 import { Body, Controller, Post } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiBody,
-  ApiConflictResponse,
-  ApiCreatedResponse,
-  ApiNotFoundResponse,
-  ApiOperation,
-  ApiTags,
-  ApiUnprocessableEntityResponse,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { ScheduleAppointmentService } from '@/domains/domain/services/appointments/schedule-appointment.service';
 import { CurrentDoctor } from '@/framework/authentication/current-doctor.decorator';
@@ -17,22 +8,21 @@ import {
   AppointmentPresenter,
 } from '@/presentation/presenters/appointment.presenter';
 
+import {
+  ApiBusinessRuleErrorResponse,
+  ApiConflictErrorResponse,
+  ApiNotFoundErrorResponse,
+} from '../../../decorators/api-domain-error.decorator';
 import { ApiUnauthorizedErrorResponse } from '../../../decorators/api-unauthorized-error.decorator';
 import { ApiValidationErrorResponse } from '../../../decorators/api-validation-error.decorator';
 import { ScheduleAppointmentDto } from '../../../schemas/domain/appointment.schema';
 
 /**
- * `POST /api/appointments` — marca uma consulta. É a rota que carrega a regra
- * central do sistema.
+ * `POST /api/appointments` — a rota que carrega a regra central do sistema.
  *
- * Três coisas precisam ser verdade para o 201 sair: o paciente é deste médico
- * (senão 404), ele não foi anonimizado por pedido de LGPD (senão 422) e o horário
- * está livre (senão 409).
- *
- * "Livre" quer dizer que não há outra consulta **não cancelada** do mesmo médico
- * naquele instante exato. Cancelar devolve o horário para a agenda.
- *
- * Mais detalhes: PRODUCT.md — INV-01, INV-02, INV-04.
+ * Para o 201 sair: o paciente é deste médico (senão 404), não foi anonimizado
+ * (senão 422) e o horário está livre (senão 409). "Livre" é não haver outra consulta
+ * **não cancelada** naquele instante — cancelar devolve o horário.
  */
 @ApiTags('agendamentos')
 @ApiBearerAuth()
@@ -46,10 +36,8 @@ export class ScheduleAppointmentController {
     description:
       'Recusa com **409** se já houver consulta não cancelada do mesmo médico no mesmo instante. Cancelar libera o horário de volta.',
   })
-  // O segundo exemplo é o **roteiro do 409**: aquele instante é exatamente o da
-  // consulta que o seed deixa agendada, então executá-lo com o `patientId` de
-  // qualquer paciente demonstra INV-01 sem preparar nada. `patientId` continua sendo
-  // colado à mão — ele nasce no banco, e um id fixo aqui seria mentira.
+  // O segundo exemplo usa o instante que o seed deixa ocupado: executá-lo demonstra
+  // o 409 sem preparar nada. O `patientId` é colado à mão porque nasce no banco.
   @ApiBody({
     type: ScheduleAppointmentDto,
     examples: {
@@ -90,48 +78,27 @@ export class ScheduleAppointmentController {
     ],
   })
   @ApiUnauthorizedErrorResponse()
-  @ApiNotFoundResponse({
+  @ApiNotFoundErrorResponse({
     description: 'Paciente inexistente — ou de outro médico.',
-    schema: {
-      example: {
-        statusCode: 404,
-        code: 'RESOURCE_NOT_FOUND',
-        message: 'Paciente não encontrado.',
-      },
-    },
+    message: 'Paciente não encontrado.',
   })
-  @ApiConflictResponse({
+  @ApiConflictErrorResponse({
     description: 'Já existe consulta não cancelada neste horário.',
-    schema: {
-      example: {
-        statusCode: 409,
-        code: 'SCHEDULE_CONFLICT',
-        message: 'Já existe um agendamento neste horário.',
-      },
-    },
+    message: 'Já existe um agendamento neste horário.',
   })
-  @ApiUnprocessableEntityResponse({
+  @ApiBusinessRuleErrorResponse({
     description: 'O paciente foi anonimizado (LGPD).',
-    schema: {
-      example: {
-        statusCode: 422,
-        code: 'BUSINESS_RULE_VIOLATION',
-        message: 'Paciente anonimizado (LGPD) não pode receber novos agendamentos.',
-      },
-    },
+    message: 'Paciente anonimizado (LGPD) não pode receber novos agendamentos.',
   })
   async handle(
     @CurrentDoctor() doctorId: string,
     @Body() body: ScheduleAppointmentDto,
   ): Promise<AppointmentHttpResponse> {
-    // O `doctorId` vem do token e é espalhado sobre o corpo, nunca o contrário: o
-    // schema é `.strict()`, então mandar `doctorId` no JSON responde 400. Se ele
-    // pudesse chegar pelo corpo, qualquer médico agendaria na agenda de qualquer
-    // outro. (INV-04)
+    // `doctorId` vem do token, nunca do corpo: se chegasse pelo JSON, qualquer médico
+    // agendaria na agenda de qualquer outro. O schema é `.strict()` e recusa com 400.
     const result = await this.scheduleAppointment.execute({ doctorId, ...body });
 
     if (result.isLeft()) {
-      // `throw` entrega o erro ao filtro global, que traduz para status e mensagem.
       throw result.value;
     }
 

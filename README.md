@@ -50,13 +50,11 @@ de aplicação roda **dentro do container**.
 | 11  | Compilação                                  | `docker exec api-prontomed npm run build`              |
 | 12  | **Testes unitários** — sem banco            | `docker exec api-prontomed npm test`                   |
 | 13  | **Testes de integração** — Postgres real    | `docker exec api-prontomed npm run test:e2e`           |
-| 14  | **Prova sob estresse** — concorrência e carga | `cd api && npm run test:stress`                      |
 | —   | Derrubar tudo (`-v` apaga também os bancos) | `docker compose down [-v]`                             |
 
-**Os quatro passos que têm pegadinha:**
+**Os três passos que têm pegadinha:**
 
-- **4** — sobem **três** containers: API, Postgres e o k6 da [prova sob
-  estresse](#prova-sob-estresse), que fica ocioso até você chamá-lo.
+- **4** — sobem **dois** containers: API e Postgres. Nada além disso é necessário.
 - **6** — **não é opcional, e o passo 5 não denuncia a falta dele:** o healthcheck não
   sonda o banco de propósito. Sem migrations a API sobe verde e quebra na primeira rota
   que tocar uma tabela.
@@ -65,13 +63,10 @@ de aplicação roda **dentro do container**.
   (duas concluídas com anotação, uma agendada) e um paciente **de propósito sem
   consulta**, que é o caso de linha do tempo vazia. Datas fixas, nunca relativas a hoje.
   **Idempotente:** da segunda execução em diante só reconfirma a senha do `.env`.
-- **13 e 14** — **auto-contidos**: não há nada a preparar antes deles. O `test:e2e`
-  cria as tabelas do banco de **teste** por conta própria (são dois bancos, e o e2e
-  nunca toca o de desenvolvimento — é o que impede um teste de destruir o seed do
-  passo 7), e o `test:stress` resolve o próprio volume de carga. Depois do passo 6 os
-  dois rodam do zero, em qualquer ordem e quantas vezes você quiser. O **14** é o
-  único que roda no host: ele é orquestração e precisa do `docker`, que não existe
-  dentro do container.
+- **13** — **auto-contido**: não há nada a preparar antes dele. O `test:e2e` cria as
+  tabelas do banco de **teste** por conta própria (são dois bancos, e o e2e nunca toca
+  o de desenvolvimento — é o que impede um teste de destruir o seed do passo 7).
+  Depois do passo 6 ele roda do zero, quantas vezes você quiser.
 
 Por que os comandos de aplicação rodam com `docker exec`, o que o compose monta e como
 os dois bancos nascem: [`api/README.md`](api/README.md#ambiente-de-execução).
@@ -127,7 +122,7 @@ estraga o estado de demonstração para a próxima leitura.
 **O 409 do passo 6 é só a primeira das duas camadas.** O que você vê é a checagem do
 caso de uso, que consulta o horário antes de gravar; ela não resolve duas requisições
 **simultâneas**. A segunda camada é um índice único **parcial** no Postgres, e tem
-prova própria e quantificada — [Prova sob estresse](#prova-sob-estresse).
+prova própria na suíte de integração — [Concorrência](#concorrência).
 
 **Por que o passo 7 existe:** sem ele, INV-01 fica demonstrada pela metade. Um sistema
 que recusa o horário ocupado e **não** o libera de volta no cancelamento está
@@ -188,7 +183,7 @@ histórico para preservar quando o paciente é anonimizado.
 | **RNF-05** | Testes unitários e/ou de integração                       | Obrigatório | ✅     | as duas camadas, e uma terceira — [**Testes**](#testes)                                          |
 | **RNF-06** | Documentação da modelagem do banco (ER)                   | Desejável   | ✅     | [**Modelagem**](#modelagem)                                                                      |
 | **RNF-07** | MySQL ou PostgreSQL, com ou sem ORM                       | Desejável   | ✅     | PostgreSQL 16 + TypeORM, migrations geradas e revisadas à mão                                    |
-| **RNF-08** | Setup de ambiente com docker/docker-compose               | Desejável   | ✅     | `docker compose up -d` sobe API, banco e a ferramenta de carga; Docker é o único pré-requisito   |
+| **RNF-08** | Setup de ambiente com docker/docker-compose               | Desejável   | ✅     | `docker compose up -d` sobe API e banco; Docker é o único pré-requisito   |
 | **RNF-09** | Hospedar em ambiente cloud                                | Desejável   | ⛔     | **fora de escopo, por decisão** — ver abaixo                                                     |
 | **RNF-10** | Autenticação e/ou autorização                             | Desejável   | ✅     | JWT curto + refresh opaco revogável, guard global — passos 1 e 2                                 |
 | **RNF-11** | Ferramenta de lint ou qualidade                           | Desejável   | ✅     | ESLint (com a regra que enforça a fronteira de camadas) + Prettier + `tsc`                       |
@@ -206,7 +201,7 @@ automatizaria a chamada; não acrescentaria garantia nenhuma.
 | Item                                                    | Status | Onde está                                                                          |
 | ------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------- |
 | Instruções de como rodar o projeto, no readme           | ✅     | [Do clone à validação](#do-clone-à-validação) — 14 passos, um comando cada         |
-| Artefatos: scripts de banco, dados de conexão, etc.     | ✅     | migrations versionadas, `npm run seed`, `seed:load`, credenciais e string no readme |
+| Artefatos: scripts de banco, dados de conexão, etc.     | ✅     | migrations versionadas, `npm run seed`, credenciais e string de conexão no readme |
 | Projeto hospedado no git para avaliação                 | ✅     | repositório público no GitHub, `main` sincronizada                                  |
 
 ### Como cada item avaliado se comprova
@@ -224,14 +219,13 @@ automatizaria a chamada; não acrescentaria garantia nenhuma.
 
 ## Testes
 
-Três camadas, três perguntas diferentes — e os **passos 12 a 14** de
+Duas camadas, duas perguntas diferentes — e os **passos 12 e 13** de
 [Do clone à validação](#do-clone-à-validação), um comando cada.
 
 | Camada         | Comando                | Escala               | Que pergunta responde                                                                              |
 | -------------- | ---------------------- | -------------------- | ---------------------------------------------------------------------------------------------------- |
 | **Unitários**  | `npm test`             | 133 casos, 21 suítes | "a regra está certa?" — máquina de estados, invariantes, quem pode o quê. Porta in-memory, **sem banco** |
-| **Integração** | `npm run test:e2e`     | 153 casos, 10 suítes | "o sistema inteiro entrega?" — `AppModule` + Supertest + Postgres real. Única camada que prova o que **só o banco** garante |
-| **Estresse**   | `npm run test:stress`  | 2 cenários, k6       | "sobrevive a concorrência e volume?" — [Prova sob estresse](#prova-sob-estresse)                   |
+| **Integração** | `npm run test:e2e`     | 154 casos, 10 suítes | "o sistema inteiro entrega?" — `AppModule` + Supertest + Postgres real. Única camada que prova o que **só o banco** garante |
 
 A divisão não é cerimônia. Há garantias que nenhum teste unitário alcança, porque não
 estão no código — estão no schema: o índice único parcial que fecha a corrida do slot
@@ -241,33 +235,29 @@ estão no código — estão no schema: o índice único parcial que fecha a cor
 Estratégia de teste em detalhe — o que cada camada monta, o que é vazamento de
 arquitetura: [`api/README.md`](api/README.md#testes).
 
-<a id="prova-sob-estresse"></a>
+<a id="concorrência"></a>
 
-### Prova sob estresse
+### Concorrência
 
-Um comando, com o stack de pé. Leva cerca de um minuto e não há passo extra — o
-`docker compose up -d` do passo 4 já deixa o k6 ocioso, e o comando resolve o seed de
-volume sozinho:
+**O 409 que você viu no passo 6 é a checagem do caso de uso, e ela sozinha não basta.**
+Duas requisições simultâneas podem passar as duas por ela antes de qualquer uma gravar.
+Quem fecha a corrida é um índice único **parcial** no Postgres — parcial porque consulta
+cancelada tem de devolver o horário:
 
-```bash
-cd api && npm run test:stress
+```sql
+CREATE UNIQUE INDEX uk_appointments_doctor_slot
+  ON appointments (doctor_id, scheduled_at)
+  WHERE status <> 'CANCELLED';
 ```
 
-| Cenário       | O que faz                                                                    | Resultado                                                                 |
-| ------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `overbooking` | 20 VUs disputam **o mesmo horário** do mesmo médico, com pacientes distintos | `created_201 count=1` · `conflict_409 count=19` · `checks rate=100.00%`   |
-| `load`        | 5 VUs por 30 s nas três listagens paginadas                                  | p95 de 11 a 18 ms nas três rotas, sobre 500 pacientes e 2.000 consultas   |
+Isso é verificado na suíte, não em prosa: `npm run test:e2e` dispara **20 requisições
+simultâneas** no mesmo horário do mesmo médico, com pacientes distintos, e exige
+`1× 201`, `19× 409 SCHEDULE_CONFLICT` e **uma** linha viva no banco.
 
-Duas conclusões, e nenhuma delas é o milissegundo: **é o índice que fecha a corrida** —
-com ele removido, as mesmas 20 requisições criam **12** consultas no mesmo horário — e
-**nenhum débito de performance foi aberto**, porque os dois candidatos conhecidos
-(`ILIKE` sem índice de texto, paginação por `OFFSET`) foram medidos e não destoam.
-
-> Isto é **demonstração, não regressão**: nada dispara este comando sozinho, e um
-> `test:e2e` verde nunca deve ser lido como prova de concorrência.
-
-Metodologia, números por endpoint, condição da máquina e o procedimento de verificação
-com o índice removido: [**`api/test/stress/README.md`**](api/test/stress/README.md).
+E o teste tem a prova de que testa. Um teste de corrida fica verde sem nunca ter havido
+corrida, se as requisições serializarem — a saída é idêntica à do sistema correto. Então
+ele foi rodado uma vez com o índice **removido**: aí **3 das 20** entram, e o overbooking
+acontece. É o número que separa "o `if` está segurando" de "o banco está segurando".
 
 **Retry ainda não tem prova, e é escolha declarada:** não há `Idempotency-Key`, então
 `POST /api/patients` repetido cria duas linhas (o agendamento é exceção — a chave
@@ -429,6 +419,5 @@ Cada assunto tem **um** dono. Este README aponta; a autoridade decide.
 | Ver o **plano de execução** — requisitos, fases na ordem, contratos HTTP, padrões de código    | [`api/docs/PLAN.md`](api/docs/PLAN.md)                                   |
 | Saber **o que ficou de fora e por quê**, com gatilho de reabertura                             | [`api/docs/DEBITOS-TECNICOS.md`](api/docs/DEBITOS-TECNICOS.md)           |
 | Acompanhar **como cada sprint foi executada** — decisões, issues, scores de review             | [`api/docs/desenvolvimento/sprints/`](api/docs/desenvolvimento/sprints/) |
-| Entender a **prova sob estresse** — metodologia, números medidos, verificação ao contrário     | [`api/test/stress/README.md`](api/test/stress/README.md)                 |
 | Reexecutar o **roteiro de avaliação por máquina**                                              | [`api/test/roteiro-mcp-playwright/`](api/test/roteiro-mcp-playwright/)   |
 | Saber **como escrever doc** neste repositório                                                  | [`api/docs/DOC-STANDARDS.md`](api/docs/DOC-STANDARDS.md)                 |

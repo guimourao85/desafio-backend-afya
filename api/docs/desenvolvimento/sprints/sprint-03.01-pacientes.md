@@ -263,9 +263,9 @@ apagar de menos é conformidade fingida — `review-security.md §verifica` trat
 | `GET /api/patients/:id/appointments` (linha do tempo) | **04.02 (F5)** — depende de `appointments` existir |
 | Qualquer coisa de agenda | 04.01 (F4) |
 | Anonimizar o texto livre das anotações | **DEBT-01** — declarado, não implementado |
-| Busca com acento-insensível ou por telefone/email | 06.01, se aparecer necessidade real |
-| `Idempotency-Key` no `POST` | DEBT-05 · sprint 06.01 |
-| Índice de texto (`pg_trgm`) para a busca | 06.01 — decisão 12 explica por que não agora |
+| Busca com acento-insensível ou por telefone/email | fora de escopo, se aparecer necessidade real |
+| `Idempotency-Key` no `POST` | **DEBT-05** |
+| Índice de texto (`pg_trgm`) para a busca | fora de escopo — decisão 12 explica por que não agora |
 <!-- /§objetivo -->
 
 ---

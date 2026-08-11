@@ -1,5 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { Server } from 'http';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
 
@@ -29,6 +30,7 @@ const OUTRO_SLOT = '2026-08-13T09:00:00.000Z';
  */
 describe('Agendamentos (e2e)', () => {
   let app: INestApplication;
+  let server: Server;
   let dataSource: DataSource;
   let passwordHash: string;
   let ownerId: string;
@@ -43,6 +45,15 @@ describe('Agendamentos (e2e)', () => {
     app = moduleRef.createNestApplication();
     configureApp(app);
     await app.init();
+
+    // O servidor escuta **uma vez só**, e isso é requisito do teste de concorrência
+    // logo abaixo: sem um socket já aberto, cada `request()` das 20 simultâneas
+    // tentaria o seu próprio `listen(0)` no mesmo servidor, e a primeira resposta o
+    // fecharia debaixo das outras 19 — `ECONNRESET` em vez de `409`.
+    server = app.getHttpServer() as Server;
+    await new Promise<void>((resolve) => {
+      server.listen(0, resolve);
+    });
 
     dataSource = app.get<DataSource>(PRONTOMED_POSTGRES_DATA_SOURCE);
     passwordHash = await app.get(PasswordHasher).hash(PASSWORD);
@@ -106,6 +117,48 @@ describe('Agendamentos (e2e)', () => {
         code: 'SCHEDULE_CONFLICT',
         message: 'Já existe um agendamento neste horário.',
       });
+      expect(await dataSource.getRepository(Appointment).count()).toBe(1);
+    });
+
+    /**
+     * O caso sequencial acima é pego pelo `SELECT` do caso de uso. Este aqui é o que
+     * o `SELECT` **não** garante: 20 requisições podem passar todas pela verificação
+     * antes de qualquer uma gravar, e aí só o índice único parcial impede a segunda
+     * linha.
+     *
+     * A asserção é o **estado final**, e é isso que a torna determinística: uma linha
+     * viva, tenha havido corrida ou não.
+     *
+     * Que a corrida existe de verdade foi medido derrubando o índice e repetindo estas
+     * mesmas 20 requisições: **3 delas entraram**. É a contraprova — sem ela, um teste
+     * verde aqui também seria o que se veria se as requisições simplesmente
+     * serializassem. Ela não vira regressão porque depende de a janela abrir; o guarda
+     * determinístico do índice é o teste de `uk_appointments_doctor_slot` mais abaixo.
+     */
+    it('20 requisições simultâneas no mesmo horário: uma cria, dezenove recusam', async () => {
+      // Um paciente diferente por requisição: assim o 409 só pode vir do conflito de
+      // agenda, e nunca de outra regra que também responde 409.
+      const patients = dataSource.getRepository(Patient);
+      const concorrentes = await Promise.all(
+        Array.from({ length: 20 }, (_, indice) =>
+          patients.insert({ doctorId: ownerId, name: `Paciente Simultâneo ${indice}` }),
+        ),
+      );
+
+      const respostas = await Promise.all(
+        concorrentes.map((inserido) => schedule(SLOT, inserido.identifiers[0].id as string)),
+      );
+
+      const criadas = respostas.filter((r) => r.status === 201);
+      const conflitos = respostas.filter((r) => r.status === 409);
+
+      expect(criadas).toHaveLength(1);
+      expect(conflitos).toHaveLength(19);
+      // O conflito chega como regra de negócio traduzida, não como erro de banco cru:
+      // é o que separa invariante defendida de `QueryFailedError` vazando em 500.
+      expect(conflitos.every((r) => r.body.code === 'SCHEDULE_CONFLICT')).toBe(true);
+      expect(respostas.filter((r) => r.status >= 500)).toHaveLength(0);
+
       expect(await dataSource.getRepository(Appointment).count()).toBe(1);
     });
 

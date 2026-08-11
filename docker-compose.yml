@@ -24,30 +24,6 @@ services:
         condition: service_healthy
     networks: [prontomed-net]
 
-  k6:
-    image: grafana/k6:latest
-    container_name: k6-prontomed
-    # **Sobe sempre, junto com o resto.** É POC avaliada localmente: um único
-    # `docker compose up -d` deixa tudo pronto e disponível, e quem avalia não precisa
-    # saber que existe `--profile`, nem buildar ou puxar imagem em passo separado.
-    #
-    # `entrypoint` sobrescrito porque a imagem do k6 é uma **CLI**, não um servidor: o
-    # entrypoint dela é o próprio binário, e o `command` natural seria
-    # `run /scripts/stress-test.js`. Do jeito natural, o container executaria o teste
-    # de estresse **no boot** — contra um banco que ainda nem rodou as migrations — e
-    # morreria com erro, deixando um `Exited (99)` na cara de quem acabou de subir o
-    # projeto. Aqui ele fica ocioso e a ferramenta é acionada por
-    # `npm run test:stress`, que faz `docker exec` neste container. Disponível não é
-    # a mesma coisa que disparado.
-    entrypoint: ['sleep', 'infinity']
-    volumes: ['./api/test/stress:/scripts']
-    environment:
-      # Endereço **de dentro da rede** — o k6 fala com `api:3333`, não com o
-      # `localhost:3333` do host. O prefixo `/api` é o global de `app.setup.ts:15`.
-      - API_URL=http://api:3333/api
-    depends_on: [api]
-    networks: [prontomed-net]
-
   database:
     image: postgres:16-alpine
     container_name: db-prontomed

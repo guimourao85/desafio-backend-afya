@@ -122,8 +122,8 @@ const DEMO_APPOINTMENTS = [
  *
  * Revoga, **só para este script**, a decisão de 07/08/2026 de não tratar
  * idempotência fora da sprint dedicada (decisão do usuário, 10/08/2026). O que
- * continua na 06.01 é outra coisa: idempotência de **requisição HTTP**
- * (`Idempotency-Key`, DEBT-05), que se prova com o sistema sob carga.
+ * continua em aberto é outra coisa: idempotência de **requisição HTTP**
+ * (`Idempotency-Key`, DEBT-05) — script de terminal e rota têm custos diferentes.
  */
 export async function seed(): Promise<void> {
   const logger = new Logger('DemoSeed');

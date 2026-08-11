@@ -83,17 +83,34 @@ de quem consome a API. Em cookie `httpOnly` ele seria invisível a JavaScript.
 **Fora o agendamento, um retry de criação pode duplicar o registro.**
 Não há header `Idempotency-Key`: dois `POST` idênticos criam dois recursos, exceto
 onde o banco já tem chave única para barrar o segundo.
-**Por que fica assim:** o agendamento tem chave natural única `(doctor_id, scheduled_at)` — um retry produz 409 determinístico, nunca duplicata (idempotência efetiva). Para os demais POSTs, o ganho não paga a mecânica de armazenar e expirar chaves.
-**Reconfirmado em 10/08/2026 — não reduzido, não fechado.** A sprint 06.01 desenhou a
-solução inteira (tabela `idempotency_keys`, migration, porta, adapter, módulo,
-interceptor, header, TTL, invariante e ADR), passou por fricção PRÉ com os quatro
-agentes, e então **cortou tudo**: a releitura do PDF do desafio não achou uma linha
-pedindo idempotência — nem requisito funcional, nem não-funcional, nem item de
-avaliação. Era a maior superfície da sprint para o único item sem base no enunciado
-(sub-doc 06.01, decisão 15). Dois achados da fricção sobrevivem como parte do
-rationale: `response_body` guardaria uma **segunda cópia de PII** fora do alcance da
-anonimização (D1), e o desenho record-after-success **perde a corrida da própria
-chave** (C1) — entregaria mecanismo não pedido com limite conhecido.
+**A superfície exata são dois endpoints**, e nenhum deles tem chave natural:
+
+| `POST` | Chave natural | Retry hoje |
+| --- | --- | --- |
+| `/appointments` | `(doctor_id, scheduled_at)` | **fechado** — 409 determinístico, uma linha |
+| `/patients` | não há | cria duas linhas |
+| `/appointments/:id/notes` | não há | cria duas linhas |
+
+**Por que fica assim.** Não é falta de vontade, é ausência de candidata: o enunciado
+não dá CPF (os campos são nome, telefone, email, nascimento, sexo, altura, peso),
+`email` é opcional e legitimamente compartilhável entre pacientes do mesmo médico, e
+duas anotações idênticas na mesma consulta podem ser reais. Sem chave natural, a
+única saída é o mecanismo inteiro — tabela, migration, porta, adapter, módulo,
+interceptor, header, TTL e ADR —, e **nenhuma linha do enunciado pede idempotência**:
+nem requisito funcional, nem não-funcional, nem item de avaliação.
+
+**O que decide é o que está em jogo.** Duplicar agendamento quebrava uma invariante:
+dois pacientes na mesma hora, agenda corrompida, sem sinal para o médico. Por isso
+foi fechado — no banco, não no `if`. Duplicar paciente ou anotação **não quebra
+invariante nenhuma**: aparece na listagem, é visível e é reversível. O único lugar
+onde repetição corrompia estado já está fechado, e é por isso que este débito é MÉDIO.
+
+Dois achados da fricção do desenho cortado sobrevivem como parte do rationale:
+`response_body` guardaria uma **segunda cópia de PII** fora do alcance da
+anonimização, e o desenho *record-after-success* **perde a corrida da própria chave** —
+para ser correto sob concorrência, o mecanismo precisaria de uma `UNIQUE` na chave,
+gravada antes de executar. É constraint até embaixo.
+
 **Gatilho de reabertura:** cliente com retry automático criando recursos sem chave natural.
 
 ### DEBT-06 · BAIXO · segurança

@@ -56,9 +56,8 @@ api/docs/desenvolvimento/sprints/sprint-NN.MM-<escopo-em-kebab>.md
   e mora onde o trabalho aconteceu. A numeração já planejada no `§roadmap` é
   **reservada**: não se desloca, não recebe sub-doc intercalado, e o acréscimo não
   vira sprint nova nem sub-doc de sprint futura. A linha no `§roadmap` entra com
-  fase `—` e declara a data e o motivo. Precedente: `06.01` (rigor transversal,
-  09/08/2026). **Isso não é órfão nem débito** — órfão é o sub-doc que nunca ganha a
-  linha.
+  fase `—` e declara a data e o motivo. **Isso não é órfão nem débito** — órfão é o
+  sub-doc que nunca ganha a linha.
 - **Registro de planejamento não vira sub-doc próprio.** Planejar uma sprint futura é
   produzir o insumo da fricção PRÉ **dela** — o resultado mora **dentro do sub-doc
   planejado**, não num sub-doc de sessão à parte. A regra da exceção acima cobre

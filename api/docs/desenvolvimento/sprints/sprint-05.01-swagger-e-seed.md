@@ -68,7 +68,7 @@ projeto para alguém colar dado real "só para testar".
 | ------------------------------------------------------------- | ------------------------------------------------------- |
 | README do avaliador: roteiro de 6 passos, RF/RNF, ER, ADRs     | F7 / sprint 05.02                                       |
 | `@ApiProperty` manual em DTO                                   | proibido por ADR-07 — schema sai do Zod                 |
-| Seed de carga / volume para teste de performance               | sprint 06.01 (rigor)                                    |
+| Seed de carga / volume para teste de performance               | fora de escopo — nenhum requisito pede desempenho       |
 | Versionamento do OpenAPI (`/v1`), export do JSON para arquivo  | não pedido pelo enunciado — corte declarado (decisão 9) |
 | Tradução do Swagger UI ou tema customizado                     | ruído de apresentação, `PLAN.md §3.1` corta             |
 

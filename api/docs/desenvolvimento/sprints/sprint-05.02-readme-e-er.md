@@ -43,7 +43,7 @@ quatro MÉDIO no doc antes da primeira linha de prosa (§scores).
 > formatação de tabelas, em 10/08/2026) — o arquivo foi relido antes de cada edição e
 > nada do que estava lá foi revertido.
 >
-> É a última fase de feature do roadmap: depois dela só resta a 06.01.
+> É a última fase de feature do roadmap.
 
 ---
 
@@ -88,7 +88,7 @@ aparece para quem escreveu, só para quem clonou.
 | Fora                                                              | Onde vai                                                                     |
 | ------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | **Pipeline de CI (GitHub Actions)**                                 | **Cortado — não vai a lugar nenhum** (decisão 6)                             |
-| Teste de concorrência no slot, idempotência e carga                 | sprint 06.01 (rigor)                                                         |
+| Teste de concorrência no slot, idempotência e carga                 | concorrência ficou para depois (hoje no e2e) · idempotência é **DEBT-05** · carga saiu de escopo |
 | Deploy, cloud, ambiente de produção                                 | ADR-12 — fora do escopo do projeto, por decisão                              |
 | Reescrever `api/README.md` (documento de arquitetura)               | já existe e já cumpre o papel — o README raiz **aponta**, não repete (decisão 3) |
 | Reescrever o ledger de débitos em prosa mais legível                | pendência conhecida do usuário, sem fase                                     |

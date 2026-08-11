@@ -159,16 +159,13 @@ nomeado ([PLAN.md §12.4](PLAN.md)).
 
 > **O que "testado" quer dizer aqui.** Teste nomeado prova que a regra **existe** e
 > que ela rejeita o caso que deve rejeitar. Ele **não** prova comportamento sob
-> corrida, volume ou retry — essa classe de prova é da sprint 06.01, por regra de
-> escopo declarada em [PLAN.md §3.2](PLAN.md). Vale para todas as sete.
+> retry — `Idempotency-Key` não existe, por decisão (DEBT-05). Vale para todas as sete.
 >
-> **A exceção é a INV-01, e ela fechou em 10/08/2026.** O índice único parcial é a
-> única defesa real contra duas requisições simultâneas, e agora está **exercitado
-> sob corrida**: 20 requisições no mesmo slot produzem `1× 201` e `19× 409`, e com o
-> índice removido do banco as mesmas 20 criam **12** consultas. A prova vive em
-> `npm run test:stress` — comando manual, **demonstração e não regressão**: nada a
-> dispara sozinha, e `npm run test:e2e` verde continua não sendo prova de
-> concorrência.
+> **A exceção é a INV-01.** O índice único parcial é a única defesa real contra duas
+> requisições simultâneas, e está **exercitado sob corrida** dentro da própria suíte:
+> 20 requisições no mesmo slot produzem `1× 201` e `19× 409`, e resta **uma** linha
+> viva. Que a corrida é real foi medido derrubando o índice — **3 das 20** entram.
+> Roda em `npm run test:e2e`, junto com todo o resto.
 
 | ID         | Invariante                                                                                     | Enforcement                                                                   | HTTP    |
 | ---------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------- |
@@ -314,7 +311,6 @@ sub-doc de sprint. Esta tabela é a única amarração canônica sprint ↔ fase
 | 04.02  | F5          | `appointments`: anotações e linha do tempo do paciente                                              | [sprint-04.02](desenvolvimento/sprints/sprint-04.02-anotacoes.md)          | ✅     |
 | 05.01  | F6          | Swagger: 400 e 401 por decorator, exemplos de corpo executáveis, seed de demonstração idempotente e gate do documento OpenAPI | [sprint-05.01](desenvolvimento/sprints/sprint-05.01-swagger-e-seed.md)     | ✅     |
 | 05.02  | F7          | README para o avaliador e ER — **sem CI** (RNF-12 cortado, `PLAN.md §3.1`)                          | [sprint-05.02](desenvolvimento/sprints/sprint-05.02-readme-e-er.md)        | ✅     |
-| 06.01  | —           | **Provas sob estresse:** concorrência no slot provada sob 20 VUs e verificada com o índice removido (ADR-09 / INV-01) · carga medida (p95/p99 sobre 500 pacientes e 2.000 consultas, sem débito aberto) — idempotência **cortada** na releitura do PDF (sub-doc, decisão 15; DEBT-05 reconfirmado) | [sprint-06.01](desenvolvimento/sprints/sprint-06.01-concorrencia-idempotencia-e-carga.md) | ✅     |
 
 **Legenda:** ⬜ não iniciada · 🟨 em andamento · ✅ verde (`lint` + `build` + `test`).
 
@@ -324,16 +320,6 @@ sub-doc de sprint. Esta tabela é a única amarração canônica sprint ↔ fase
 > diretório, container e volume criados do zero. Nas duas, os 14 passos do README e os
 > 10 do roteiro saíram verdes. Registro em
 > [sprint-05.02 §passo-9](desenvolvimento/sprints/sprint-05.02-readme-e-er.md).
-
-**Uma sprint não tem fase**, e está declarada:
-
-- **06.01** — a transversal das provas sob estresse. Não tem fase porque não entrega
-  feature: entrega a **prova** de que features já entregues sobrevivem a
-  concorrência e volume — retry ficou fora do escopo na releitura do PDF
-  (sub-doc, decisão 15; DEBT-05 reconfirmado). Decisão do usuário em 09/08/2026 para o teste
-  concorrente do slot, estendida a toda a classe de prova em 10/08/2026.
-  **A regra que a governa é [PLAN.md §3.2](PLAN.md)** — sprint de feature entrega a
-  regra, a 06.01 entrega a prova. Esta linha não a repete: aponta.
 
 **Numeração:** `NN.MM` — `NN` é a sprint (agrupamento entregável), `MM` é o sub-doc
 dentro dela. Nenhuma fase de `PLAN.md §13` existe fora desta tabela; nenhum sub-doc

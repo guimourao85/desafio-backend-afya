@@ -12,11 +12,10 @@ O que **não** mora aqui, e por quê — cada assunto tem um dono só:
 | Personas, jornadas, agregados, invariantes, ADRs, banco | [`docs/PRODUCT.md`](docs/PRODUCT.md)                                          |
 | Requisitos, fases, contratos HTTP, padrões de código   | [`docs/PLAN.md`](docs/PLAN.md)                                                |
 | Débitos, com severidade e gatilho de reabertura        | [`docs/DEBITOS-TECNICOS.md`](docs/DEBITOS-TECNICOS.md)                        |
-| A prova sob estresse — método, números, condição       | [`test/stress/README.md`](test/stress/README.md)                              |
 
 > Este arquivo descreve o que **existe** no repositório hoje: F0 a F7 construídas
-> (autenticação, pacientes, agenda, anotações, Swagger executável, seed, provas sob
-> estresse). Estado por sprint em [`docs/PRODUCT.md §roadmap`](docs/PRODUCT.md).
+> (autenticação, pacientes, agenda, anotações, Swagger executável, seed). Estado por
+> sprint em [`docs/PRODUCT.md §roadmap`](docs/PRODUCT.md).
 
 ---
 
@@ -106,7 +105,7 @@ src/
 │  ├─ database.module.ts               @Global + shutdown da conexão
 │  ├─ migrations/                      linha do tempo única — uma por sprint
 │  ├─ repositories/                    adapters que implementam as portas
-│  └─ seeds/                           demo.seed.ts (avaliação) · load.seed.ts (volume)
+│  └─ seeds/                           demo.seed.ts (dados de avaliação)
 │
 ├─ presentation/presenters/   serialização de saída — nada de entity crua na resposta
 └─ shared/
@@ -246,9 +245,8 @@ migration aplicada nunca é editada; a correção é uma migration nova.
 ## Ambiente de execução
 
 O `docker-compose.yml` é **global** (raiz do repositório); o projeto NestJS mora em
-`api/`, que é o cwd de todo `npm run`. Três containers: `api-prontomed`, `db-prontomed`
-e `k6-prontomed` — este último ocioso até a [prova sob
-estresse](test/stress/README.md).
+`api/`, que é o cwd de todo `npm run`. Dois containers: `api-prontomed` e
+`db-prontomed`.
 
 **Portas:** API em `3333`; Postgres em **`5433` no host**, `5432` dentro da rede Docker
 — 5432 costuma estar ocupada por outro stack na mesma máquina.
@@ -296,18 +294,14 @@ comando que já está aqui.
 | Script interno | Quem o dispara | Por que existe separado |
 | --- | --- | --- |
 | `migration:run:test` | `test:e2e`, antes do Jest | O banco de teste é do e2e e de mais ninguém. Migrar por fora era um passo a mais para preparar um banco que o próprio comando sabe preparar — e esquecê-lo dava `relation does not exist` |
-| `seed:load` | `test:stress`, antes do k6 | O volume de carga é pré-condição do teste, não escolha do operador ([`test/stress/README.md`](test/stress/README.md)) |
 
-Os dois são **idempotentes**: a segunda execução não repete migration nem duplica
-volume, então acionar o comando de fora custa quase nada. É o que torna `test:e2e` e
-`test:stress` auto-contidos — rodam do zero, em qualquer ordem, quantas vezes se
-quiser.
+Ele é **idempotente**: a segunda execução não repete migration, então acioná-lo de
+fora custa quase nada. É o que torna `test:e2e` auto-contido — roda do zero, em
+qualquer ordem, quantas vezes se quiser.
 
-**Exceções à regra do `docker exec`:** `test:stress` roda **no host**, de dentro de
-`api/`, porque é orquestração — faz `docker exec` na API para o seed de volume e no k6
-para o teste ([`test/stress/README.md`](test/stress/README.md)). O roteiro por
-Playwright também roda no host, e pelo mesmo motivo invertido: o browser vive fora do
-container ([`test/roteiro-mcp-playwright/`](test/roteiro-mcp-playwright/)).
+**Exceção à regra do `docker exec`:** o roteiro por Playwright roda **no host**, porque
+o browser vive fora do container
+([`test/roteiro-mcp-playwright/`](test/roteiro-mcp-playwright/)).
 
 > **Nunca `npx typeorm` direto** — sempre pelos scripts, que passam
 > `typeorm-ts-node-commonjs` e o `-d` correto.
@@ -316,20 +310,19 @@ container ([`test/roteiro-mcp-playwright/`](test/roteiro-mcp-playwright/)).
 
 ## Testes
 
-Três camadas, três perguntas. As duas primeiras são Jest e vivem neste diretório; a
-terceira é k6 e tem [documento próprio](test/stress/README.md).
+Duas camadas, duas perguntas — as duas em Jest, as duas neste diretório.
 
 | Camada | Monta | Prova | Onde |
 | --- | --- | --- | --- |
 | **Unitário** | `TestingModule` com a porta sobrescrita por um in-memory | regra pura, sem banco | `*.spec.ts` ao lado do alvo |
 | **Integração** | `AppModule` inteiro + Supertest + Postgres real | rota → service → banco, incluindo constraints e o documento OpenAPI | `test/integration/*.e2e-spec.ts` |
-| **Estresse** | k6 contra a API de pé | corretude sob corrida e latência sob volume | `test/stress/` |
 
 Se um teste unitário precisar mockar `DataSource` ou o repositório concreto, isso é
 vazamento de arquitetura — conserta-se o código, não o teste.
 
-**A camada de integração é a única que prova o que só o banco garante:** o índice único
-parcial que fecha o slot (INV-01), o `CHECK` que recusa anotação vazia por `INSERT`
+**A camada de integração é a única que prova o que só o banco garante** — e a única que
+prova comportamento sob corrida: 20 requisições simultâneas no mesmo horário, uma linha
+viva. É dela o índice único parcial que fecha o slot (INV-01), o `CHECK` que recusa anotação vazia por `INSERT`
 direto, a FK `ON DELETE NO ACTION` que impede apagar consulta com anotação. Desde F6 ela
 também é gate do documento OpenAPI: nenhuma rota sem `summary`, sem exemplo ou sem o 401
 documentado.

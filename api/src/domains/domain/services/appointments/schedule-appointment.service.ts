@@ -86,6 +86,12 @@ export class ScheduleAppointmentService {
     // verificação tem um buraco intransponível: duas requisições simultâneas podem
     // passar as duas por aqui antes de qualquer uma gravar. O banco recusa a
     // segunda gravação de qualquer jeito.
+    //
+    // **Idempotência é outro problema, e não é este.** Ela pergunta "a mesma intenção
+    // chegou duas vezes?"; INV-01 pergunta "duas intenções diferentes cabem no mesmo
+    // horário?". Um retry idêntico já termina em uma linha só pela chave natural
+    // `(doctor_id, scheduled_at)`; `Idempotency-Key` serve a recurso **sem** chave
+    // natural, que não é o caso aqui (DEBT-05).
     const conflict = await this.appointmentRepository.findActiveBySlot(doctorId, scheduledAt);
 
     if (conflict) {

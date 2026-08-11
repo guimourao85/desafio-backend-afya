@@ -77,27 +77,29 @@ fechamento de fase (`PLAN.md §13`) · mudança em invariante.
 
 ### Determinismo em teste de concorrência
 
-> **Onde a prova mora, desde 10/08/2026.** Corrida e volume são cobráveis na
-> **camada de carga** (`api/test/stress/stress-test.js`, rodada por
-> `npm run test:stress`), que a sprint 06.01 entregou. **Jest não ataca
-> concorrência** e não deve ser cobrado por isso: ausência de spec concorrente em
-> `*.spec.ts` ou `*.e2e-spec.ts` não é achado, em sprint nenhuma. Retry sob
+> **Onde a prova mora.** Corrida **é** cobrável em Jest e2e: 20 requisições
+> disparadas por `Promise.all` contra um servidor já escutando produzem corrida real
+> contra o banco — medido, com o índice único removido, **3 das 20** entram. O que
+> **não** é cobrável é assertar que a janela abriu: isso depende de escalonamento e é
+> exatamente o teste frágil que esta seção existe para evitar. Retry sob
 > `Idempotency-Key` continua **sem prova e sem mecanismo**, por decisão (DEBT-05
-> reconfirmado) — cobrar também não é achado.
+> reconfirmado) — cobrar não é achado.
 
 O teste de N requisições simultâneas no mesmo slot (ADR-09 / INV-01) exige:
 - pool com **≥2 conexões** — senão o driver serializa e o teste prova o oposto do pretendido (o do app é 10);
-- asserção sobre o **conjunto** dos resultados — contadores `created_201 == 1` e `conflict_409 == N-1` —, nunca sobre qual chegou primeiro;
+- **um socket já aberto** antes das concorrentes (`server.listen(0)` uma vez no `beforeAll`) — sem isso cada `request()` do supertest abre o seu, e a primeira resposta fecha o servidor debaixo das outras: `ECONNRESET` em vez de `409`;
+- asserção sobre o **conjunto** dos resultados — um `201` e N-1 `409` —, nunca sobre qual chegou primeiro;
 - verificação final no banco: **exatamente uma** linha viva no slot;
 - o 409 traduzido para o `code` do catálogo (`SCHEDULE_CONFLICT`), e não `QueryFailedError` vazando como 500;
 - estado inicial limpo pelo próprio teste, e horário **constante literal** — slot derivado do relógio é data incontrolada.
 
 **E a prova de que o teste testa.** Um teste de corrida fica verde sem nunca ter
-havido corrida se os VUs serializarem: a checagem do caso de uso pega o conflito e a
-saída é idêntica à do sistema correto. Por isso a camada de carga carrega um
-procedimento de contraprova — rodar uma vez com o índice único removido e ver o
-overbooking acontecer (sub-doc 06.01, execução B; medido: **12 de 20** passam).
-Camada de carga entregue **sem** contraprova registrada é achado **ALTO**.
+havido corrida se as requisições serializarem: a checagem do caso de uso pega o
+conflito e a saída é idêntica à do sistema correto. Por isso a asserção é sobre o
+**estado final** — uma linha viva, com ou sem corrida —, e a contraprova (rodar com o
+índice removido e ver o overbooking acontecer) é **medição de uma vez, registrada no
+comentário do próprio teste**, nunca asserção. Teste de concorrência sem essa
+contraprova registrada é achado **ALTO**.
 <!-- /§regras -->
 
 ---
@@ -115,7 +117,7 @@ Para a fase em revisão, cada invariante tocada tem teste nomeado?
 
 | Invariante | Teste que a prova |
 | --- | --- |
-| INV-01 | mesmo slot → 409 · outro médico → 201 · cancelado libera · reagendar para ocupado → 409 · *(N concorrentes → um 201 e N-1 409: **camada de carga**, `test/stress/stress-test.js`; não é cobrável em Jest)* |
+| INV-01 | mesmo slot → 409 · outro médico → 201 · cancelado libera · reagendar para ocupado → 409 · N concorrentes → um 201 e N-1 409 · o índice barra a duplicata por fora do caso de uso |
 | INV-02 | anonimizado: agendar → 422 · editar → 422 |
 | INV-03 | anonimizar preserva a contagem de consultas e anotações |
 | INV-04 | recurso de outro médico → 404 (não 403), em toda rota com `:id` |
@@ -159,9 +161,9 @@ enquanto a API cresce para dezessete. Verde sem cobertura é o pior estado poss�
 
 - Ausência de meta percentual de cobertura: decisão do projeto (a lista de casos obrigatórios é o gate).
 - Ausência de teste para getter trivial, presenter simples ou mapper sem regra.
-- **Ausência de spec Jest concorrente: não é achado, em sprint nenhuma.** Jest não ataca corrida — a prova de concorrência e de volume vive na **camada de carga** (`npm run test:stress`), entregue pela 06.01 em 10/08/2026. Cobrar um `*.e2e-spec.ts` que dispare duas requisições ao mesmo tempo é pedir o teste frágil que a regra de escopo ([PLAN.md §3.2](../PLAN.md)) existe para evitar.
-- **Ausência de prova sob retry: não é achado.** `Idempotency-Key` foi cortada na releitura do PDF do desafio (sub-doc 06.01, decisão 15) e **DEBT-05 segue aberto e reconfirmado**. Não há mecanismo a testar.
-- **Camada de carga fora de `npm run test:e2e`: não é achado, é o desenho.** Ela é demonstração, não regressão, e o preço está declarado no README e em `PLAN.md §12.4`. O que **é** achado (ALTO) é alguém tratar `test:e2e` verde como prova de concorrência.
+- **Asserção de que a corrida aconteceu: é achado, não é cobrança.** O teste de concorrência afirma o **estado final** (uma linha viva); exigir que ele prove que a janela abriu é pedir dependência de escalonamento.
+- **Ausência de medição de latência ou de volume: não é achado, em sprint nenhuma.** Nenhum requisito do enunciado pede desempenho — nem funcional, nem não-funcional, nem item de avaliação. Cobrar p95, vazão ou seed de volume é inventar requisito.
+- **Ausência de prova sob retry: não é achado.** `Idempotency-Key` não existe por decisão, e **DEBT-05 segue aberto e reconfirmado**. Não há mecanismo a testar.
 - Duplicação de setup entre testes de integração: legibilidade vale mais que DRY em teste.
 <!-- /§verifica -->
 
@@ -201,7 +203,7 @@ Invariante da fase sem teste → **REPROVADO**, independentemente do resto.
 - [ ] Caminho de erro testado, não só o feliz
 - [ ] Nenhum `sleep`, nenhuma dependência de ordem, nenhuma data incontrolada
 - [ ] Nenhum mock de TypeORM em teste unitário
-- [ ] *(só quando a sprint toca a camada de carga)* Teste de concorrência com pool ≥2, asserção por **contador** sobre o conjunto, slot constante literal e **contraprova registrada** (rodada com o índice removido)
+- [ ] *(só quando a sprint toca INV-01)* Teste de concorrência com pool ≥2, socket já aberto, asserção sobre o **estado final** e não sobre a ordem, slot constante literal e **contraprova registrada em comentário** (rodada com o índice removido)
 - [ ] Integração usa `prontomed_test` e limpa estado em `beforeEach`
 - [ ] Asserções específicas (status exato, campo exato), não frouxas
 - [ ] Nomes descrevem comportamento
